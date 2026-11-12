@@ -1005,6 +1005,16 @@ public partial class SidePanelWindow : Window
         WirePlannerView();
     }
 
+    private void OnCodexSegmentChanged(object sender, SelectionChangedEventArgs e)
+    {
+        e.Handled = true;
+        if (OperatorView is null || EquipmentView is null) return;
+        bool equipment = CodexSegment.SelectedIndex == 1;
+        OperatorView.Visibility = equipment ? Visibility.Collapsed : Visibility.Visible;
+        EquipmentView.Visibility = equipment ? Visibility.Visible : Visibility.Collapsed;
+        if (IsLoaded) PageTransition.SlideIn(equipment ? EquipmentView : OperatorView, fromY: 8);
+    }
+
     private void WirePlannerView()
     {
         PlannerVm = new LineupPlannerViewModel(_lineupPlanner, _allOperators, BanVm, LineupVm.Calculator.EquipmentRules)
