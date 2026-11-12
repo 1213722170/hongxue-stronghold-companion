@@ -1,4 +1,4 @@
-// Modified for ASP Assistant Regulation on 2026-11-11; see NOTICE.
+// Modified for ASP Assistant Regulation on 2026-11-13; see NOTICE.
 using System.IO;
 using System.Windows;
 using ASPAssistant.App.Windows;
@@ -300,6 +300,7 @@ public partial class App : Application
             getConnection: () => captureService.Connection)
         {
             TerminalReader = new TerminalLevelReader(ocrEngine),
+            EconomyReader = new ShopEconomyReader(ocrEngine),
             ThemeProvider = () => shopReader.Theme,
             ThemeDetector = new GameShopThemeDetector(Path.Combine(dataDir, "shop_theme_refs.json")),
             AutomaticGameTheme = automaticGameTheme,
@@ -646,6 +647,7 @@ public partial class App : Application
             if (!_ocrScanner.TryStartNewRun(bansChanged)) return;
             _ocrScanner.ResetTerminalLevel();
             _ocrScanner.ResetRegulationLevel();
+            _ocrScanner.ResetEconomy();
             await Dispatcher.InvokeAsync(deploy.StartNewRunAsync).Task.Unwrap();
             await _settingsManager.SaveTerminalLevelAsync(0);
             AppLogger.Info("Run", bansChanged ? "Changed Ban set confirmed; progress reset for the new run"
@@ -673,6 +675,11 @@ public partial class App : Application
         _ocrScanner.BanScreenDetected += async () => await RecordInformationAsync();
         _ocrScanner.RegulationLevelChanged += () =>
             Dispatcher.Invoke(() => enemyVm.RegulationLevel = _ocrScanner.RegulationLevel);
+        _ocrScanner.EconomyChanged += economy => Dispatcher.Invoke(() =>
+        {
+            trackingVm.Economy = economy;
+            if (economy?.Mode is { } mode) enemyVm.CurrentMode = mode;
+        });
         _ocrScanner.TerminalLevelChanged += level =>
         {
             Dispatcher.Invoke(() =>
