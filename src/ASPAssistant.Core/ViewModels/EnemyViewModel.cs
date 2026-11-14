@@ -80,34 +80,39 @@ public partial class EnemyViewModel : ObservableObject
     [ObservableProperty]
     private bool _bossHasHiddenForm;
 
-    [ObservableProperty]
-    private int? _regulationLevel;
+    public int? RegulationLevel
+    {
+        get => CurrentMode is { } mode && mode.StartsWith("规程等级") ? int.Parse(mode["规程等级".Length..]) : null;
+        set => CurrentMode = value is { } level ? $"规程等级{level}" : null;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCurrentBossHp))]
     private BossHpCell? _currentBossHp;
 
     public bool HasCurrentBossHp => CurrentBossHp is not null;
-    public IEnumerable<BossHpCell> OtherBossHpSingle => BossHpSingle.Where(cell => cell != CurrentBossHp);
+    public IEnumerable<BossHpCell> OtherBossHpSingle => BossHpSingle.Where(cell => cell.Name != CurrentBossHp?.Name);
 
     [ObservableProperty]
     private bool _otherBossHpExpanded = true;
 
-    partial void OnRegulationLevelChanged(int? value) => RefreshCurrentBossHp();
-
     private void RefreshCurrentBossHp()
     {
-        CurrentBossHp = RegulationLevel is { } level
-            ? BossHpSingle.FirstOrDefault(cell => cell.Label == level.ToString()) : null;
+        CurrentBossHp = BossHpSingle.FirstOrDefault(cell => cell.Name == CurrentMode);
         OtherBossHpExpanded = CurrentBossHp is null;
         OnPropertyChanged(nameof(OtherBossHpSingle));
     }
 
     /// <summary>Mode name read from the shop HUD (规程等级 N / …模拟); highlights that HP cell.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RegulationLevel))]
     private string? _currentMode;
 
-    partial void OnCurrentModeChanged(string? value) => MarkCurrentMode();
+    partial void OnCurrentModeChanged(string? value)
+    {
+        MarkCurrentMode();
+        RefreshCurrentBossHp();
+    }
 
     private void MarkCurrentMode()
     {
@@ -196,9 +201,9 @@ public partial class EnemyViewModel : ObservableObject
         foreach (var level in bossInfo?.Hp ?? [])
             (level.Group == "multi" ? BossHpMulti : BossHpSingle).Add(BossHpCell.From(level));
         BossHasHiddenForm = bossInfo?.Hp.Any(l => l.HiddenHp is not null) == true;
-        RegulationLevel = result.RegulationLevel ?? RegulationLevel;
-        RefreshCurrentBossHp();
+        if (result.RegulationLevel is { } detectedLevel) RegulationLevel = detectedLevel;
         MarkCurrentMode();
+        RefreshCurrentBossHp();
         AvatarPath = string.IsNullOrWhiteSpace(bossInfo?.IconPath)
             ? null
             : bossInfo!.IconPath.Trim();

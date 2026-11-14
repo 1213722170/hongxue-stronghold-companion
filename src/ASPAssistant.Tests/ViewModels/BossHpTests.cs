@@ -8,6 +8,43 @@ namespace ASPAssistant.Tests.ViewModels;
 public class BossHpTests
 {
     [Fact]
+    public void ShopModeAndOpeningDifficultyUseTheSameHpSelection()
+    {
+        var vm = new EnemyViewModel();
+        var boss = new BossInfo
+        {
+            Hp = [new() { Name = "规程等级7", Group = "single", Hp = 400000 },
+                  new() { Name = "极速模拟", Group = "single", Hp = 100000 },
+                  new() { Name = "标准模拟", Group = "multi", Hp = 200000 }]
+        };
+        vm.Update(new("假想敌：胄", [], []), boss, []);
+        vm.CurrentMode = "规程等级7";
+        vm.RegulationLevel.Should().Be(7);
+        vm.HasCurrentBossHp.Should().BeTrue();
+        vm.OtherBossHpSingle.Select(cell => cell.Name).Should().Equal("极速模拟");
+        vm.OtherBossHpExpanded = true;
+        vm.CurrentMode = "规程等级7";
+        vm.OtherBossHpExpanded.Should().BeTrue();
+        vm.CurrentMode = "标准模拟";
+        vm.RegulationLevel.Should().BeNull();
+        vm.HasCurrentBossHp.Should().BeFalse();
+        vm.OtherBossHpExpanded.Should().BeTrue();
+        vm.BossHpMulti.Single().IsCurrent.Should().BeTrue();
+        vm.Update(new("假想敌：胄", [], []), boss, []);
+        vm.CurrentMode.Should().Be("标准模拟");
+        vm.BossHpMulti.Single().IsCurrent.Should().BeTrue();
+        vm.CurrentMode = "极速模拟";
+        vm.CurrentBossHp!.Hp.Should().Be("10 万");
+        vm.OtherBossHpExpanded.Should().BeFalse();
+        vm.RegulationLevel = 7;
+        vm.CurrentMode.Should().Be("规程等级7");
+        vm.CurrentBossHp!.Hp.Should().Be("40 万");
+        vm.RegulationLevel = null;
+        vm.CurrentMode.Should().BeNull();
+        vm.BossHpMulti.Single().IsCurrent.Should().BeFalse();
+    }
+
+    [Fact]
     public void RecognizedDifficultyShowsItsHpAndCollapsesOnlyTheOtherLevels()
     {
         var vm = new EnemyViewModel { RegulationLevel = 7 };
@@ -17,7 +54,7 @@ public class BossHpTests
                   new() { Name = "规程等级8", Group = "single", Hp = 500000 }]
         };
         vm.Update(new("假想敌：胄", ["特训敌人·元素"], []), boss, [new()]);
-        vm.CurrentBossHp.Should().Be(new BossHpCell("7", "规程等级7", "40 万", "80 万"));
+        vm.CurrentBossHp.Should().Be(new BossHpCell("7", "规程等级7", "40 万", "80 万", true));
         vm.OtherBossHpExpanded.Should().BeFalse();
         vm.OtherBossHpSingle.Select(cell => cell.Label).Should().Equal("8");
         vm.OtherBossHpExpanded = true;

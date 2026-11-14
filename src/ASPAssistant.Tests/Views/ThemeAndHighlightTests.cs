@@ -51,6 +51,58 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     }
 
     [Fact]
+    public Task ShopEconomy_RendersAndResetsAcrossThemesAndWidths() => ui.RunAsync(() =>
+    {
+        var vm = new TrackingViewModel();
+        var view = new TrackingView { DataContext = vm };
+        var row = (Border)view.FindName("EconomyRow");
+        var round = (TextBlock)view.FindName("EconomyRound");
+        var money = (TextBlock)view.FindName("EconomyMoney");
+        var cost = (TextBlock)view.FindName("EconomyCost");
+        var mode = (TextBlock)view.FindName("EconomyMode");
+        foreach (var theme in Enum.GetValues<GameShopTheme>())
+        foreach (var night in new[] { false, true })
+        foreach (var width in new[] { 280, 360 })
+        {
+            void Layout()
+            {
+                Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                view.Measure(new Size(width, 900));
+                view.Arrange(new Rect(0, 0, width, 900));
+                view.UpdateLayout();
+            }
+            ThemeManager.Apply(theme, night);
+            vm.Economy = null;
+            Layout();
+            row.Visibility.Should().Be(Visibility.Collapsed);
+            vm.Economy = new(99, 999, 999, false, "规程等级20", true);
+            Layout();
+            row.Visibility.Should().Be(Visibility.Visible);
+            round.Text.Should().Be("99");
+            money.Text.Should().Be("999");
+            cost.Text.Should().Be("999");
+            mode.Text.Should().Be("规程等级20");
+            foreach (var text in new[] { round, money, cost, mode })
+                text.DesiredSize.Width.Should().BeLessThanOrEqualTo(text.ActualWidth + 1);
+            var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "shop-economy");
+            Directory.CreateDirectory(output);
+            var bitmap = new RenderTargetBitmap(width, 900, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(view);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var file = File.Create(Path.Combine(output, $"{theme}-{night}-{width}.png"))) encoder.Save(file);
+            vm.Economy = new(1, null, null, true, "标准模拟", true);
+            Layout();
+            money.Text.Should().Be("–");
+            cost.Text.Should().Be("满级");
+            mode.Text.Should().Be("标准模拟");
+            vm.Economy = null;
+            Layout();
+            row.Visibility.Should().Be(Visibility.Collapsed);
+        }
+    }, nameof(ShopEconomy_RendersAndResetsAcrossThemesAndWidths));
+
+    [Fact]
     public Task EnemyHp_FocusesRecognizedDifficulty() => ui.RunAsync(() =>
     {
         var bosses = new BossDataService();

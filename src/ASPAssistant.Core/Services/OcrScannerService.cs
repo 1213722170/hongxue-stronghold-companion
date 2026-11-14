@@ -15,9 +15,9 @@ public class OcrScannerService : IDisposable
     private readonly ShopReader _shopReader;
     private readonly IOcrEngine _ocrEngine;
     private readonly RegulationLevelReader _regulationReader;
-    private readonly object _regulationLock = new();
+    private readonly object _runLock = new();
     private int? _regulationLevel;
-    private int _regulationRevision;
+    private int _runRevision;
     private DateTime _nextRegulationRead = DateTime.MinValue;
     private readonly GameState.GameState _gameState;
     private readonly IReadOnlyList<string> _shopNames;
@@ -41,13 +41,13 @@ public class OcrScannerService : IDisposable
     public event Action<GameState.GameState>? GameStateUpdated;
 
     public event Action? RegulationLevelChanged;
-    public int? RegulationLevel { get { lock (_regulationLock) return _regulationLevel; } }
+    public int? RegulationLevel { get { lock (_runLock) return _regulationLevel; } }
 
     public void ResetRegulationLevel()
     {
-        lock (_regulationLock)
+        lock (_runLock)
         {
-            _regulationRevision++;
+            _runRevision++;
             _regulationLevel = null;
             _nextRegulationRead = DateTime.MinValue;
         }
@@ -65,6 +65,7 @@ public class OcrScannerService : IDisposable
 
     /// <summary>Raised on the scan thread when the confirmed shop HUD values change (null after a reset).</summary>
     public event Action<ShopEconomy?>? EconomyChanged;
+    public ShopEconomy? CurrentEconomy { get { lock (_runLock) return _economy.Current; } }
 
     private readonly ShopEconomyTracker _economy = new();
     private DateTime _nextEconomyRead;
@@ -182,11 +183,12 @@ public class OcrScannerService : IDisposable
                 _banScreenActive = false;
                 _banScreenAbsentTicks = 0;
                 ResetRegulationLevel();
+                ResetEconomy();
                 _gameState.ShopItems = [];
                 GameStateUpdated?.Invoke(_gameState);
             }
-            int regulationRevision;
-            lock (_regulationLock) regulationRevision = _regulationRevision;
+            int runRevision;
+            lock (_runLock) runRevision = _runRevision;
             var screenshot = _captureScreen();
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
             if (screenshot == null)
@@ -216,7 +218,7 @@ public class OcrScannerService : IDisposable
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
 
             if (!_pauseBanScreenDetection)
-                await ReadRegulationLevelAsync(screenshot, imgWidth, imgHeight, connection, regulationRevision);
+                await ReadRegulationLevelAsync(screenshot, imgWidth, imgHeight, connection, runRevision);
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
 
             if (_pauseBanScreenDetection || _banScreenActive)
@@ -233,7 +235,7 @@ public class OcrScannerService : IDisposable
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
             PublishShopItems(rawItems);
             await ReadTerminalLevelAsync(screenshot, imgWidth, imgHeight);
-            if (rawItems.Count > 0) await ReadEconomyAsync(screenshot, imgWidth, imgHeight);
+            if (rawItems.Count > 0) await ReadEconomyAsync(screenshot, imgWidth, imgHeight, connection, runRevision);
         }
         catch (Exception ex)
         {
@@ -250,14 +252,14 @@ public class OcrScannerService : IDisposable
     private async Task ReadRegulationLevelAsync(byte[] screenshot, int width, int height,
         GameConnectionService? connection, int revision)
     {
-        lock (_regulationLock)
+        lock (_runLock)
         {
-            if (revision != _regulationRevision || DateTime.UtcNow < _nextRegulationRead) return;
+            if (revision != _runRevision || DateTime.UtcNow < _nextRegulationRead) return;
         }
         var level = await _regulationReader.ReadAsync(screenshot, width, height);
-        lock (_regulationLock)
+        lock (_runLock)
         {
-            if (revision != _regulationRevision || _pauseBanScreenDetection
+            if (revision != _runRevision || _pauseBanScreenDetection
                 || !ReferenceEquals(connection, _getConnection?.Invoke())) return;
             _nextRegulationRead = DateTime.UtcNow.AddSeconds(3);
             if (level is null) return;
@@ -305,20 +307,36 @@ public class OcrScannerService : IDisposable
     }
 
     /// <summary>Only while shop cards are visible: the HUD reads cost several OCR calls.</summary>
-    private async Task ReadEconomyAsync(byte[] screenshot, int width, int height)
+    private async Task ReadEconomyAsync(byte[] screenshot, int width, int height, GameConnectionService? connection, int revision)
     {
-        if (EconomyReader is null || DateTime.UtcNow < _nextEconomyRead) return;
-        _nextEconomyRead = DateTime.UtcNow + EconomyReadInterval;
+        if (EconomyReader is null) return;
+        lock (_runLock)
+        {
+            if (revision != _runRevision || DateTime.UtcNow < _nextEconomyRead) return;
+        }
         var read = await EconomyReader.ReadAsync(screenshot, width, height);
-        if (!_economy.Observe(read)) return;
-        AppLogger.Info("Economy", $"{_economy.Current}");
-        EconomyChanged?.Invoke(_economy.Current);
+        ShopEconomy? current;
+        lock (_runLock)
+        {
+            if (revision != _runRevision || _pauseBanScreenDetection
+                || !ReferenceEquals(connection, _getConnection?.Invoke())) return;
+            _nextEconomyRead = DateTime.UtcNow + EconomyReadInterval;
+            if (!_economy.Observe(read)) return;
+            current = _economy.Current;
+        }
+        AppLogger.Info("Economy", $"{current}");
+        EconomyChanged?.Invoke(current);
     }
 
     /// <summary>New game (opening information recorded): forget the last game's HUD values.</summary>
     public void ResetEconomy()
     {
-        _economy.Reset();
+        lock (_runLock)
+        {
+            _runRevision++;
+            _economy.Reset();
+            _nextEconomyRead = DateTime.MinValue;
+        }
         EconomyChanged?.Invoke(null);
     }
 

@@ -175,7 +175,7 @@
                         <!-- Shop HUD: round, funds, upgrade price (read while the shop is open) -->
                         <Border x:Name="EconomyRow" Visibility="Collapsed" Margin="0,10,0,0" Padding="10,6"
                                 CornerRadius="{DynamicResource RowCornerRadius}" Background="{DynamicResource SectionBackgroundBrush}"
-                                ToolTip="打开商店时自动读取左上角回合、右下角资金和升级卡上方的升级价；读不清时保留上次的数">
+                                ToolTip="打开商店时自动读取顶部回合和模式、右下角资金及升级卡上方的升级价；读不清时保留上次的数">
                             <DockPanel>
                                 <TextBlock x:Name="EconomyMode" DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Bottom" Margin="0,0,0,3"
                                            Foreground="{DynamicResource TextSecondaryBrush}" />

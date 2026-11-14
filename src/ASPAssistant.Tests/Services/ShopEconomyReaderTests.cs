@@ -8,6 +8,16 @@ namespace ASPAssistant.Tests.Services;
 [Collection("Native OCR")]
 public class ShopEconomyReaderTests(ShopReaderFixture fixture) : IClassFixture<ShopReaderFixture>
 {
+    [Trait("Category", "LocalScreenshot")]
+    [Fact]
+    public async Task RecentLocalShopReadsTheConfirmedDifficultyAndVisibleEconomy()
+    {
+        var bytes = File.ReadAllBytes(fixture.Sample("regulation-level-shop-1449x815.png"));
+        var (width, height) = ImageBytes.GetDimensions(bytes);
+        var read = await new ShopEconomyReader(fixture.Engine).ReadAsync(bytes, width, height);
+        read.Should().Be(new ShopEconomy(1, 4, 5, false, "规程等级7", true));
+    }
+
     [Theory]
     [InlineData("shop-terminal-ui100-2000x1125.png", 2000, 1125)]
     [InlineData("shop-ursus-ui100-2000x1125.png", 2000, 1125)]

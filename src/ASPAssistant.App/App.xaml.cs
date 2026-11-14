@@ -675,9 +675,11 @@ public partial class App : Application
         _ocrScanner.BanScreenDetected += async () => await RecordInformationAsync();
         _ocrScanner.RegulationLevelChanged += () =>
             Dispatcher.Invoke(() => enemyVm.RegulationLevel = _ocrScanner.RegulationLevel);
-        _ocrScanner.EconomyChanged += economy => Dispatcher.Invoke(() =>
+        _ocrScanner.EconomyChanged += _ => Dispatcher.Invoke(() =>
         {
+            var economy = _ocrScanner.CurrentEconomy;
             trackingVm.Economy = economy;
+            if (economy is null) enemyVm.CurrentMode = null;
             if (economy?.Mode is { } mode) enemyVm.CurrentMode = mode;
         });
         _ocrScanner.TerminalLevelChanged += level =>

@@ -13,6 +13,56 @@ namespace ASPAssistant.Tests.Services;
 public class OcrScannerServiceTests
 {
     [Fact]
+    public async Task ShopEconomyPublishesOnlyConfirmedValuesAndResetClearsThem()
+    {
+        using var scanner = CreateScanner(() => _screenshot, new(), economyReader: CreateEconomyReader());
+        var updates = new List<ShopEconomy?>();
+        scanner.EconomyChanged += updates.Add;
+        await scanner.ScanNowAsync();
+        scanner.CurrentEconomy.Should().BeNull();
+        await Task.Delay(TimeSpan.FromSeconds(2.1));
+        await scanner.ScanNowAsync();
+        scanner.CurrentEconomy.Should().Be(new ShopEconomy(1, 4, 5, false, "规程等级7", true));
+        updates.Should().ContainSingle();
+        scanner.ResetEconomy();
+        scanner.CurrentEconomy.Should().BeNull();
+        updates.Last().Should().BeNull();
+        await scanner.ScanNowAsync();
+        scanner.CurrentEconomy.Should().BeNull("the previous run's confirmed values must not act as candidates");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LateEconomyReadCannotSurviveARunResetOrConnectionSwitch(bool switchConnection)
+    {
+        using var previous = new GameConnectionService();
+        using var next = new GameConnectionService(new() { Source = GameCaptureSource.Adb });
+        var connection = previous;
+        var economyReader = CreateEconomyReader();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<OcrTextResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 0, 0, 1152, 97))
+            .Returns(() => { entered.TrySetResult(); return release.Task; });
+        using var scanner = CreateScanner(() => _screenshot, new(), () => connection, economyReader);
+        var scan = scanner.ScanNowAsync();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (switchConnection) connection = next;
+            else scanner.ResetEconomy();
+        }
+        finally
+        {
+            release.TrySetResult([new("回合1", (600, 20, 80, 25)), new("规程等级7", (160, 40, 150, 25))]);
+            await scan;
+        }
+        scanner.CurrentEconomy.Should().BeNull();
+        await scanner.ScanNowAsync();
+        scanner.CurrentEconomy.Should().BeNull("the stale frame must not count as the first matching read");
+    }
+
+    [Fact]
     public async Task DifficultyIsReadOnTheOpeningEvenWhenTheShopScanIsSuppressed()
     {
         _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 480, 0, 960, 108))
@@ -323,8 +373,20 @@ public class OcrScannerServiceTests
         state.ShopItems.Select(i => i.Name).Should().Equal(_names);
     }
 
+    private ShopEconomyReader CreateEconomyReader()
+    {
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 0, 0, 1152, 97))
+            .ReturnsAsync([new("回合1", (600, 20, 80, 25)), new("规程等级7", (160, 40, 150, 25)), new("休息一下", (700, 20, 150, 25))]);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 0, 896, 1152, 184))
+            .ReturnsAsync([new("升级", (500, 979, 100, 30))]);
+        _ocr.Setup(e => e.RecognizeLineAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()))
+            .Returns((byte[] _, int x, int _, int _, int _) =>
+                Task.FromResult<IReadOnlyList<OcrTextResult>>([new(x > 1700 ? "4" : "5", (x, 807, 20, 30))]));
+        return new ShopEconomyReader(_ocr.Object);
+    }
+
     private OcrScannerService CreateScanner(Func<byte[]?> capture, ASPAssistant.Core.GameState.GameState state,
-        Func<GameConnectionService>? getConnection = null) => new(
+        Func<GameConnectionService>? getConnection = null, ShopEconomyReader? economyReader = null) => new(
         capture, new GarrisonOcrStrategy(), new ShopReader(_ocr.Object, _names) { Theme = GameShopTheme.Closure },
-        _ocr.Object, state, _names, getConnection: getConnection);
+        _ocr.Object, state, _names, getConnection: getConnection) { EconomyReader = economyReader };
 }
