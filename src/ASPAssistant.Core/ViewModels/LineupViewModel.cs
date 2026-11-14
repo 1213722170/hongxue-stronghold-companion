@@ -28,7 +28,7 @@ public partial class LineupViewModel : ObservableObject
     {
         _store = store;
         Calculator = calculator;
-        Lineups.CollectionChanged += (_, _) => { RefreshAvailability(); Refresh(); };
+        Lineups.CollectionChanged += (_, _) => RefreshAvailability();
     }
 
     public void LoadLineups(IEnumerable<Lineup> lineups)
@@ -43,15 +43,19 @@ public partial class LineupViewModel : ObservableObject
         RefreshAvailability();
     }
 
-    public void RefreshAvailability() => OnPropertyChanged(nameof(VisibleLineups));
+    public void RefreshAvailability()
+    {
+        OnPropertyChanged(nameof(VisibleLineups));
+        Refresh();
+    }
 
     partial void OnSelectedAvailabilityFilterChanged(AvailabilityFilter value) => RefreshAvailability();
 
     public bool CanMove(Lineup lineup, int direction)
     {
-        var index = VisibleLineups.ToList().IndexOf(lineup);
+        var index = FilteredLineups.IndexOf(lineup);
         return index >= 0 && (direction == 0 ? Lineups.IndexOf(lineup) > 0
-            : direction < 0 ? index > 0 : index < VisibleLineups.Count - 1);
+            : direction < 0 ? index > 0 : index < FilteredLineups.Count - 1);
     }
 
     public async Task MoveAsync(Lineup lineup, int direction)
@@ -62,7 +66,7 @@ public partial class LineupViewModel : ObservableObject
         if (direction == 0) Lineups.Move(index, 0);
         else
         {
-            var visible = VisibleLineups.ToList();
+            var visible = FilteredLineups.ToList();
             var other = visible[visible.IndexOf(lineup) + direction];
             var otherIndex = Lineups.IndexOf(other);
             Lineups[index] = other;
@@ -195,7 +199,7 @@ public partial class LineupViewModel : ObservableObject
     private void Refresh()
     {
         FilteredLineups.Clear();
-        foreach (var l in Lineups.Where(MatchesSearch)
+        foreach (var l in VisibleLineups.Where(MatchesSearch)
                      .Where(l => LineupTargets.Matches(l, Calculator, FilterCovenants, FilterTier, FilterMatchAll)))
             FilteredLineups.Add(l);
         Recommendations.Clear();

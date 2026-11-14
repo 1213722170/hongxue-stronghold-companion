@@ -4,8 +4,23 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:ASPAssistant.App.Controls"
              xmlns:views="clr-namespace:ASPAssistant.App.Views"
+             xmlns:converters="clr-namespace:ASPAssistant.App.Converters"
+             xmlns:viewModels="clr-namespace:ASPAssistant.Core.ViewModels;assembly=ASPAssistant.Core"
              Background="{DynamicResource PanelBackgroundBrush}">
     <UserControl.Resources>
+        <converters:LineupTrackedConverter x:Key="LineupTracked" />
+        <Geometry x:Key="LineupMoveUpIcon">M 12 20 L 12 5 M 6 11 L 12 5 L 18 11</Geometry>
+        <Geometry x:Key="LineupMoveDownIcon">M 12 4 L 12 19 M 6 13 L 12 19 L 18 13</Geometry>
+        <Geometry x:Key="LineupMoveTopIcon">M 5 4 L 19 4 M 12 20 L 12 9 M 6 15 L 12 9 L 18 15</Geometry>
+        <Style x:Key="LineupOrderButton" TargetType="Button" BasedOn="{StaticResource RowIconButton}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35" /></Trigger>
+            </Style.Triggers>
+        </Style>
+
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="LineupTopButton" TargetType="Button" BasedOn="{StaticResource ClickableButtonBase}">
@@ -43,7 +58,7 @@
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
         <Style x:Key="CardAction" TargetType="Button" BasedOn="{StaticResource LineupTopButton}">
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Margin" Value="0,0,6,4" />
             <Setter Property="MinWidth" Value="48" />
         </Style>
         <Style x:Key="CardPrimaryAction" TargetType="Button" BasedOn="{StaticResource CardAction}">
@@ -147,10 +162,27 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="LineupCardStyle" TargetType="Border">
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource CardCornerRadius}" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                </Trigger>
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding><MultiBinding Converter="{StaticResource LineupTracked}"><Binding Path="Lineup.Id" /><Binding Path="TrackedLineupIds" RelativeSource="{RelativeSource AncestorType=UserControl}" /></MultiBinding></DataTrigger.Binding>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrongBorderBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <!-- One lineup card (我的阵容 and 本局推荐) -->
         <DataTemplate x:Key="LineupCardTemplate" DataType="{x:Type views:LineupCardItem}">
-            <Border Padding="10" Margin="0,0,0,8" BorderThickness="1" CornerRadius="{DynamicResource CardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource LineBrush}">
+            <Border Style="{StaticResource LineupCardStyle}" Padding="10" Margin="0,0,0,8" Tag="{Binding Lineup.Id}">
                 <Grid>
                     <Border x:Name="rail" Width="3" HorizontalAlignment="Left" Margin="-10,-10,0,-10" Visibility="Collapsed"
                             CornerRadius="2,0,0,2" Background="{DynamicResource SuccessBrush}" />
@@ -158,6 +190,11 @@
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" FontSize="11" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock Text="追踪中" FontSize="10" Foreground="{DynamicResource AccentBrush}" DockPanel.Dock="Right" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers>
+                                                <DataTrigger Value="True"><DataTrigger.Binding><MultiBinding Converter="{StaticResource LineupTracked}"><Binding Path="Lineup.Id" /><Binding Path="TrackedLineupIds" RelativeSource="{RelativeSource AncestorType=UserControl}" /></MultiBinding></DataTrigger.Binding><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                            </Style.Triggers></Style></TextBlock.Style>
+                                        </TextBlock>
                             <Border DockPanel.Dock="Right" Style="{StaticResource TonePill}" Tag="{Binding Tone}" Margin="0,0,8,0"
                                     VerticalAlignment="Center" Visibility="{Binding HasStatus, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding StatusText}" FontSize="10" FontWeight="Bold" />
@@ -202,11 +239,7 @@
                         </ItemsControl>
                         <TextBlock x:Name="note" Text="{Binding Note}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondaryBrush}" Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" />
-                        <DockPanel Margin="0,8,0,0">
-                            <Button DockPanel.Dock="Right" Width="28" Height="28" Tag="{StaticResource IconDelete}"
-                                    Style="{StaticResource RowIconButton}" Click="OnDeleteLineup" ToolTip="删除阵容"
-                                    Visibility="{Binding ShowManage, Converter={StaticResource BoolToVis}}" />
-                            <StackPanel Orientation="Horizontal">
+                        <WrapPanel Margin="0,8,0,0">
                                 <Button Content="修补" Style="{StaticResource CardPrimaryAction}" Click="OnRepairLineup"
                                         Visibility="{Binding CanRepair, Converter={StaticResource BoolToVis}}"
                                         ToolTip="在规划里固定没被禁的干员，只给被禁的位置找替补" />
@@ -215,8 +248,17 @@
                                 <Button Content="编辑" Style="{StaticResource CardAction}" Click="OnEditLineup" />
                                 <Button Content="分享" Style="{StaticResource CardAction}" Click="OnShareLineup"
                                         Visibility="{Binding ShowManage, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
-                        </DockPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4" Visibility="{Binding ShowManage, Converter={StaticResource BoolToVis}}">
+                                            <Button Tag="{StaticResource LineupMoveUpIcon}" Style="{StaticResource LineupOrderButton}"
+                                                    CommandParameter="-1" Click="OnMoveLineup" Loaded="OnMoveButtonLoaded" ToolTip="上移阵容" />
+                                            <Button Tag="{StaticResource LineupMoveDownIcon}" Style="{StaticResource LineupOrderButton}"
+                                                    CommandParameter="1" Click="OnMoveLineup" Loaded="OnMoveButtonLoaded" ToolTip="下移阵容" />
+                                            <Button Tag="{StaticResource LineupMoveTopIcon}" Style="{StaticResource LineupOrderButton}"
+                                                    CommandParameter="0" Click="OnMoveLineup" Loaded="OnMoveButtonLoaded" ToolTip="置顶阵容" />
+                                            <Button Width="28" Height="28" Tag="{StaticResource IconDelete}"
+                                                    Style="{StaticResource RowIconButton}" Click="OnDeleteLineup" ToolTip="删除阵容" />
+                                        </StackPanel>
+                        </WrapPanel>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -272,6 +314,21 @@
                 </DockPanel>
             </Border>
         </DockPanel>
+
+        <WrapPanel DockPanel.Dock="Top" Margin="10,0,10,4">
+        <ListBox x:Name="AvailabilityFilterList" HorizontalAlignment="Left" Margin="0,0,8,4"
+                 Style="{StaticResource SegmentedListBox}" SelectedValuePath="Tag" SelectedValue="{Binding SelectedAvailabilityFilter}">
+            <ListBoxItem Content="全部" Tag="{x:Static viewModels:AvailabilityFilter.All}" />
+            <ListBoxItem Content="本局可用" Tag="{x:Static viewModels:AvailabilityFilter.Available}" />
+            <ListBoxItem Content="不可用" Tag="{x:Static viewModels:AvailabilityFilter.Unavailable}" />
+        </ListBox>
+            <Button x:Name="ClearHighlightsButton" Content="清除高亮" Click="OnClearHighlights" Margin="0,0,0,4"
+                    ToolTip="取消阵容卡片高亮，保留追踪目标和来源关联">
+                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SmallActionButton}">
+                    <Style.Triggers><DataTrigger Binding="{Binding TrackedLineupIds.Count, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="0"><Setter Property="IsEnabled" Value="False" /></DataTrigger></Style.Triggers>
+                </Style></Button.Style>
+            </Button>
+        </WrapPanel>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,0,10,10">
             <StackPanel>

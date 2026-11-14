@@ -52,7 +52,7 @@ internal static class ClearAndLineupSourceViewTests
             var segment = (ListBox)panel.FindName("CodexSegment");
             var operatorView = (OperatorBrowseView)panel.FindName("OperatorView");
             var equipmentView = (EquipmentBrowseView)panel.FindName("EquipmentView");
-            tabs.Items.OfType<TabItem>().Select(t => t.Header).Should().Equal("图鉴", "追踪", "阵容", "规划", "敌人");
+            tabs.Items.OfType<TabItem>().Select(t => t.Header).Should().Equal("图鉴", "追踪", "阵容", "敌人");
             segment.SelectedIndex.Should().Be(0);
             operatorView.Visibility.Should().Be(Visibility.Visible);
             equipmentView.Visibility.Should().Be(Visibility.Collapsed);
@@ -210,7 +210,8 @@ internal static class ClearAndLineupSourceViewTests
             finally { inputHost.Close(); }
 
             var mainTabs = (TabControl)panel.FindName("MainTabs");
-            mainTabs.SelectedItem = mainTabs.Items.OfType<TabItem>().Single(t => ReferenceEquals(t.Content, panel.FindName("LineupView")));
+            mainTabs.SelectedItem = panel.FindName("LineupsTab");
+            ((ListBox)panel.FindName("LineupsSegment")).SelectedIndex = 0;
             Pump();
             var lineupView = (LineupListView)panel.FindName("LineupView");
             tracking.TrackLineup(a);
@@ -303,7 +304,8 @@ internal static class ClearAndLineupSourceViewTests
             ClickClear(operatorSearch);
             operatorVm.SearchText.Should().BeEmpty();
 
-            mainTabs.SelectedItem = mainTabs.Items.OfType<TabItem>().Single(t => ReferenceEquals(t.Content, panel.FindName("LineupView")));
+            mainTabs.SelectedItem = panel.FindName("LineupsTab");
+            ((ListBox)panel.FindName("LineupsSegment")).SelectedIndex = 0;
             Pump();
             var apply = new Lineup { Id = "a", Name = "已保存的新阵容", Slots = [new() { OperatorName = "乙" }] };
             ChooseConfirmation(panel, () => panel.SaveEditedLineupAsync(apply, true), true);

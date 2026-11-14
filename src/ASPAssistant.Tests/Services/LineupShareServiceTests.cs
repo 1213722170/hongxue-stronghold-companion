@@ -74,6 +74,8 @@ public class LineupShareServiceTests : IDisposable
     [InlineData("sourceUrl")]
     [InlineData("candidateEquipment")]
     [InlineData("candidatePriority")]
+    [InlineData("targetCovenant")]
+    [InlineData("targetTier")]
     public async Task ChangedContentGetsNewLinkAndReturningToOriginalReusesItsLink(string change)
     {
         using var handler = new ShareHandler();
@@ -104,6 +106,8 @@ public class LineupShareServiceTests : IDisposable
             case "sourceUrl": lineup.SourceUrl = SklandGuideImporterTests.Url; break;
             case "candidateEquipment": lineup.Slots[0].CandidateEquipments.Add(new() { Name = "歌利亚头盔" }); break;
             case "candidatePriority": lineup.Slots[0].CandidateEquipments[0].IsPriority = true; break;
+            case "targetCovenant": lineup.TargetCovenants.Add(new() { Name = "炎", Tier = 1 }); break;
+            case "targetTier": lineup.TargetCovenants.Add(new() { Name = "炎", Tier = 2 }); break;
         }
 
         (await service.ExportAsync(lineup)).Should().NotBe(originalUrl);
@@ -205,7 +209,7 @@ public class LineupShareServiceTests : IDisposable
     [Fact]
     public async Task RawJsonContainingUrlRemainsJsonAndExportPayloadKeepsOriginalFormat()
     {
-        var lineup = new Lineup { Name = "https://dpaste.com/NAME", EarlySlots = [new() { OperatorName = "角峰",
+        var lineup = new Lineup { Name = "https://dpaste.com/NAME", TargetCovenants = [new() { Name = "乌萨斯", Tier = 2 }], EarlySlots = [new() { OperatorName = "角峰",
             CandidateEquipments = [new() { Name = "歌利亚头盔", IsPriority = true }, new() { Name = "不退者之盾" }] }] };
         using var handler = new ShareHandler(async (request, _) =>
         {

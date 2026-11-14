@@ -77,7 +77,8 @@ internal static class LineupFeatureTests
                 vm.SetBanChecker(_ => false);
                 filter.SelectedIndex = 2;
                 Pump();
-                ((EmptyState)view.FindName("EmptyHint")).Title.Should().Be("没有符合条件的阵容");
+                ((TextBlock)view.FindName("NoMatchHint")).Text.Should().Be("没有符合条件的阵容");
+                ((TextBlock)view.FindName("NoMatchHint")).Visibility.Should().Be(Visibility.Visible);
             }
             finally { host.Close(); }
 

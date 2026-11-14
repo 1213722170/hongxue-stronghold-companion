@@ -1085,19 +1085,7 @@ public partial class SidePanelWindow : Window
                 ShowToast($"保存失败：{ex.Message}");
             }
         };
-        PlannerVm.OverwriteRequested += async lineup =>
-        {
-            try
-            {
-                await LineupVm.AddOrUpdateAsync(lineup);
-                LineupView.RefreshAllBadges();
-                ShowToast($"已更新阵容“{lineup.Name}”");
-            }
-            catch (Exception ex)
-            {
-                ShowToast($"保存失败：{ex.Message}");
-            }
-        };
+        PlannerVm.OverwriteRequested += async lineup => await SaveEditedLineupAsync(lineup, edited: true);
         PlannerVm.TrackRequested += lineup =>
         {
             try

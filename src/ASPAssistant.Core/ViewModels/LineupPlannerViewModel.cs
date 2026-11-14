@@ -377,6 +377,7 @@ public partial class LineupPlannerViewModel : ObservableObject
     }
 
     private readonly LineupPlanner _planner;
+    private readonly CovenantCalculator _repairCalculator;
     private readonly LineupRoutePlanner _routePlanner;
     private CancellationTokenSource? _routeCts;
     private readonly BanViewModel _banVm;
@@ -395,6 +396,8 @@ public partial class LineupPlannerViewModel : ObservableObject
     {
         _equipmentRules = equipmentRules;
         _planner = planner;
+        _repairCalculator = new CovenantCalculator(operators, planner.Covenants,
+            equipmentRules.EquipmentToCovenant.ToDictionary(p => p.Key, p => p.Value));
         _banVm = banVm;
         // Strategy-only pieces (“暴躁铁皮”) never appear in the shop pool, so neither planner uses them.
         _operators = operators.Where(o => o.RequiredStrategyId.Length == 0).ToList();
@@ -447,6 +450,7 @@ public partial class LineupPlannerViewModel : ObservableObject
     [ObservableProperty] private Lineup? _repairSource;
     [ObservableProperty] private string _repairSummary = "";
     private HashSet<string> _repairBanned = [];
+    private List<TargetCovenant> _repairTargets = [];
 
     public bool IsRepairing => RepairSource is not null;
     partial void OnRepairSourceChanged(Lineup? value) => OnPropertyChanged(nameof(IsRepairing));
@@ -457,6 +461,9 @@ public partial class LineupPlannerViewModel : ObservableObject
     /// </summary>
     public void BeginRepair(Lineup lineup, IReadOnlyList<TargetCovenant> targets, IReadOnlyCollection<string> banned)
     {
+        Strategy = Enum.GetValues<PlannerStrategy>().FirstOrDefault(s => lineup.Strategies.Any(t => t.StrategyId == PlannerStrategies.StrategyId(s)));
+        MechElite = lineup.Slots.Any(s => s.OperatorName == LineupEquipmentService.MechName && s.IsElite);
+        _repairTargets = [.. targets.Select(t => t.Clone())];
         foreach (var c in AllCovenants) c.Level = 0;
         foreach (var t in targets)
             if (AllCovenants.FirstOrDefault(c => c.Name == t.Name) is { IsBlocked: false } item)
@@ -481,6 +488,7 @@ public partial class LineupPlannerViewModel : ObservableObject
         RepairSource = null;
         RepairSummary = "";
         _repairBanned = [];
+        _repairTargets = [];
         RebuildVisibleLineups();
     }
 
@@ -498,9 +506,10 @@ public partial class LineupPlannerViewModel : ObservableObject
     {
         if (RepairSource is not { } source) return null;
         var result = item.ToLineup(_equipmentRules);
-        var slots = result.Slots.Select(r => source.Slots.FirstOrDefault(s => s.OperatorName == r.OperatorName) ?? r).ToList();
+        var slots = RepairSlots(source, result.Slots);
         var copy = System.Text.Json.JsonSerializer.Deserialize<Lineup>(System.Text.Json.JsonSerializer.Serialize(source))!;
         copy.Slots = System.Text.Json.JsonSerializer.Deserialize<List<LineupSlot>>(System.Text.Json.JsonSerializer.Serialize(slots))!;
+        copy.TargetCovenants = [.. _repairTargets.Select(t => t.Clone())];
         if (asCopy)
         {
             copy.Id = Guid.NewGuid().ToString("N");
@@ -509,6 +518,9 @@ public partial class LineupPlannerViewModel : ObservableObject
         }
         return copy;
     }
+
+    private static List<LineupSlot> RepairSlots(Lineup source, IEnumerable<LineupSlot> planned)
+        => [.. planned.Select(r => source.Slots.FirstOrDefault(s => s.OperatorName == r.OperatorName) ?? r)];
 
     private string RepairTextFor(PlannedLineup lineup)
     {
@@ -1061,8 +1073,22 @@ public partial class LineupPlannerViewModel : ObservableObject
             var sw = Stopwatch.StartNew();
             var result = await Task.Run(() => _planner.Plan(request, token), token);
             if (token.IsCancellationRequested || !ReferenceEquals(_cts, cts)) return;
+            bool noRepairWithSavedEquipment = false;
+            if (RepairSource is { } source)
+            {
+                bool MeetsTargets(PlannedLineup plan)
+                {
+                    var slots = RepairSlots(source, PlannerLineupItem.Slots(plan.Operators, _equipmentRules).Concat(PlannerLineupItem.MechSlots(plan, _equipmentRules)));
+                    var counts = _repairCalculator.Compute(new Lineup { Slots = slots, Strategies = source.Strategies }).ToDictionary(s => s.Name, s => s.Count);
+                    return request.Goals.All(g => counts.GetValueOrDefault(g.Name) >= g.Count);
+                }
+                var variants = result.Variants.Select(v => v with { Lineups = v.Lineups.Where(MeetsTargets).ToList() }).ToList();
+                noRepairWithSavedEquipment = result.AllLineups.Any() && !variants.Any(v => v.Lineups.Count > 0);
+                result = new PlannerResult { Variants = variants, Error = result.Error, CandidateCount = result.CandidateCount };
+            }
             _lastResult = result;
             ApplyResult(result, sw.Elapsed);
+            if (noRepairWithSavedEquipment) StatusDetail = "保留原装备后未找到满足目标的修补方案，可调整装备或规划条件再试。";
         }
         catch (OperationCanceledException)
         {

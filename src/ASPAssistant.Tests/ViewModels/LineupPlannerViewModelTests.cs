@@ -406,4 +406,67 @@ public class LineupPlannerViewModelTests
         vm.EndRepairCommand.Execute(null);
         vm.IsRepairing.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Repair_UsesSavedStrategyAndKeepsMechAndOtherPhases()
+    {
+        var (vm, bans) = Create();
+        var source = new Lineup { Id = "saved", Name = "原阵容", SourceUrl = "https://example.test/guide",
+            Slots = [.. Enumerable.Range(1, 5).Select(i => new LineupSlot { OperatorName = $"炎{i}" }),
+                new() { OperatorName = LineupEquipmentService.MechName, IsElite = true,
+                    CandidateEquipments = [new() { Name = "候选盾", IsPriority = true }] }],
+            EarlySlots = [new() { OperatorName = "维1", Equipments = ["旧装备"], CandidateEquipments = [new() { Name = "前期候选" }] }],
+            Strategies = [new() { StrategyId = PlannerStrategies.MechId, Tags = [StrategyTag.阵容核心] }] };
+        var targets = new List<TargetCovenant> { new() { Name = "炎", Tier = 2 } };
+        var original = System.Text.Json.JsonSerializer.Serialize(source);
+        bans.SetBans(["炎5"]);
+        vm.Strategy = PlannerStrategy.Pith;
+        vm.BeginRepair(source, targets, ["炎5"]);
+        vm.Strategy.Should().Be(PlannerStrategy.Mech);
+        vm.MechElite.Should().BeTrue();
+        vm.IsActive = true;
+        await vm.PendingSearch!;
+        vm.VisibleLineups.Should().NotBeEmpty();
+        Lineup? saved = null;
+        vm.OverwriteRequested += value => saved = value;
+        vm.OverwriteLineupCommand.Execute(vm.VisibleLineups[0]);
+        saved!.Slots.Single(s => s.OperatorName == LineupEquipmentService.MechName).CandidateEquipments.Single().Name.Should().Be("候选盾");
+        saved.EarlySlots.Should().BeEquivalentTo(source.EarlySlots);
+        saved.Strategies.Should().BeEquivalentTo(source.Strategies);
+        saved.SourceUrl.Should().Be(source.SourceUrl);
+        saved.TargetCovenants.Should().BeEquivalentTo(targets);
+        System.Text.Json.JsonSerializer.Serialize(source).Should().Be(original);
+    }
+
+    [Fact]
+    public async Task Repair_ResultsReachTargetsWithTheSurvivorsSavedEquipment()
+    {
+        var (vm, bans) = Create();
+        var source = new Lineup { Slots = [.. new[] { "炎1", "炎2", "炎3", "维1", "炎5", "炎6" }.Select(n => new LineupSlot { OperatorName = n })],
+            TargetCovenants = [new() { Name = "炎", Tier = 2 }] };
+        source.Slots[3].Equipments = ["坚守盾牌"];
+        bans.SetBans(["炎5", "炎6"]);
+        vm.BeginRepair(source, source.TargetCovenants, ["炎5", "炎6"]);
+        vm.IsActive = true;
+        await vm.PendingSearch!;
+        var operators = Enumerable.Range(1, 6).Select(i => Op($"炎{i}", "炎"))
+            .Concat(Enumerable.Range(1, 6).Select(i => Op($"维{i}", "维多利亚")))
+            .Concat([Op("炎突", "炎"), Op("维突", "维多利亚")]).ToList();
+        var calculator = new CovenantCalculator(operators, vm.AllCovenants.Select(c => c.Info).ToList(),
+            EquipmentTestData.Rules.EquipmentToCovenant.ToDictionary(p => p.Key, p => p.Value));
+        Lineup? saved = null;
+        vm.OverwriteRequested += value => saved = value;
+        var variants = vm.VariantCells.Where(c => c.HasResults).ToList();
+        variants.Should().NotBeEmpty();
+        foreach (var variant in variants)
+        {
+            vm.SelectVariantCommand.Execute(variant);
+            foreach (var item in vm.VisibleLineups)
+            {
+                vm.OverwriteLineupCommand.Execute(item);
+                saved!.Slots.Single(s => s.OperatorName == "维1").Equipments.Should().Equal("坚守盾牌");
+                calculator.Compute(saved).Single(s => s.Name == "炎").Count.Should().BeGreaterThanOrEqualTo(6);
+            }
+        }
+    }
 }
