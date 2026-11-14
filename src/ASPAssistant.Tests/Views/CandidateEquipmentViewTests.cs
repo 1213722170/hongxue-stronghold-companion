@@ -97,9 +97,10 @@ internal static class CandidateEquipmentViewTests
             Button Chip(string name) => Descendants<Button>(content).Single(b => b.ToolTip is string tip && tip.Contains(name + "（右键更多）"));
             ((MenuItem)Chip("候选甲").ContextMenu.Items[0]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             vm.Slots[0].CandidateEquipments.Single(c => c.Name == "候选甲").IsPriority.Should().BeTrue();
+            ((MenuItem)Chip("候选甲").ContextMenu.Items[1]).Visibility.Should().Be(Visibility.Visible);
             ((MenuItem)Chip("候选甲").ContextMenu.Items[1]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             vm.Slots[0].Equipments.Should().Equal("装备格", "候选甲");
-            ((MenuItem)Chip("候选乙").ContextMenu.Items[1]).IsEnabled.Should().BeFalse();
+            ((MenuItem)Chip("候选乙").ContextMenu.Items[1]).Visibility.Should().Be(Visibility.Collapsed);
             ((MenuItem)Chip("候选乙").ContextMenu.Items[2]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             vm.Slots[0].CandidateEquipments.Should().BeEmpty();
             host.Close();

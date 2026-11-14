@@ -450,7 +450,7 @@ public partial class LineupEditorWindow : Window
             var menu = new ContextMenu();
             var priority = new MenuItem { Header = candidate.IsPriority ? "取消优先" : "设为优先" };
             priority.Click += (_, _) => { _vm.ToggleCandidatePriority(slotIndex, name); RefreshEditor(); };
-            var move = new MenuItem { Header = "移到装备格", IsEnabled = slot.Equipments.Count < LineupEquipmentService.Capacity(slot) };
+            var move = new MenuItem { Header = "移到装备格", Visibility = slot.Equipments.Count < LineupEquipmentService.Capacity(slot) ? Visibility.Visible : Visibility.Collapsed };
             move.Click += (_, _) => { _vm.MoveCandidateToSlot(slotIndex, name); RefreshEditor(); };
             var remove = new MenuItem { Header = "移除" };
             remove.Click += (_, _) => { _vm.RemoveCandidate(slotIndex, name); RefreshEditor(); };
