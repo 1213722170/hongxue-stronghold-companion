@@ -6,6 +6,7 @@ using FluentAssertions;
 
 namespace ASPAssistant.Tests.ViewModels;
 
+[Collection("Update environment")]
 public class EditorPanelsTests
 {
     private static readonly Operator[] Ops =
@@ -42,21 +43,29 @@ public class EditorPanelsTests
         vm.SelectPhase(LineupPhase.后期);
         vm.SetSlotOperator(0, "冻河");
         vm.ToggleSlotTag(0, LineupTag.输出);
+        vm.SetSlotElite(0, true);
+        vm.Slots[0].CandidateEquipments.Add(new() { Name = "集结指示", IsPriority = true });
         vm.CopySlotToPhase(0, LineupPhase.中期).Should().BeTrue();
         vm.CopySlotToPhase(0, LineupPhase.中期).Should().BeTrue("copying again overwrites the same operator");
         vm.SelectPhase(LineupPhase.中期);
         vm.Slots.Count(s => s.OperatorName == "冻河").Should().Be(1);
         vm.Slots.First(s => s.OperatorName == "冻河").Tags.Should().Equal(LineupTag.输出);
+        vm.Slots.First(s => s.OperatorName == "冻河").IsElite.Should().BeTrue();
+        vm.Slots.First(s => s.OperatorName == "冻河").CandidateEquipments.Single().IsPriority.Should().BeTrue();
+        vm.Slots.First(s => s.OperatorName == "冻河").CandidateEquipments.Single().IsPriority = false;
+        vm.SelectPhase(LineupPhase.后期);
+        vm.Slots[0].CandidateEquipments.Single().IsPriority.Should().BeTrue("phase copies must not share mutable candidates");
+        vm.SelectPhase(LineupPhase.中期);
         vm.CopySlotToPhase(0, LineupPhase.中期).Should().BeFalse("same phase");
     }
 
     [Fact]
-    public void SetStrategiesReplacesAllWithOneTagEach()
+    public void SetStrategiesPreservesTags()
     {
         var vm = Create();
-        vm.SetStrategies([("band_jesica", StrategyTag.优选), ("band_mess", null)]);
+        vm.SetStrategies([new() { StrategyId = "band_jesica", Tags = [StrategyTag.阵容核心, StrategyTag.优选] }, new() { StrategyId = "band_mess" }]);
         vm.StrategySlots.Should().HaveCount(LineupEditorViewModel.MaxSlots);
-        vm.ToLineup().Strategies.Select(s => (s.StrategyId, s.Tags.Count)).Should().Equal(("band_jesica", 1), ("band_mess", 0));
+        vm.ToLineup().Strategies.Select(s => (s.StrategyId, s.Tags.Count)).Should().Equal(("band_jesica", 2), ("band_mess", 0));
         vm.SetStrategies([]);
         vm.ToLineup().Strategies.Should().BeEmpty();
     }
@@ -72,5 +81,27 @@ public class EditorPanelsTests
         var with = vm.CountsWith(1, "青枳");
         with.GetValueOrDefault("迅捷").Should().Be(2);
         with.GetValueOrDefault("乌萨斯").Should().Be(1);
+    }
+
+    [Fact]
+    public void CountsWithKeepsThePositionsEquipmentLikeReplacingTheOperator()
+    {
+        var covenants = new CovenantInfo[]
+        {
+            new() { Name = "乌萨斯", BondType = "SEASON", ActivateCount = 3 },
+            new() { Name = "谢拉格", BondType = "SEASON", ActivateCount = 3 },
+            new() { Name = "迅捷", ActivateCount = 2 }, new() { Name = "坚守", ActivateCount = 2 },
+        };
+        var calculator = new CovenantCalculator(Ops, covenants, new Dictionary<string, string> { ["谢拉格转职"] = "谢拉格" });
+        var vm = new LineupEditorViewModel(new Lineup
+        {
+            Slots = [new() { OperatorName = "冻河", Equipments = [CovenantCalculator.ShapeshifterEquipment, "谢拉格转职"], IsElite = true }, new() { OperatorName = "折桠" }]
+        }, Ops, [], calculator);
+        var counts = vm.CountsWith(0, "青枳");
+        counts.GetValueOrDefault("谢拉格").Should().Be(1);
+        vm.Slots[0].OperatorName.Should().Be("冻河", "previewing a choice must not edit the lineup");
+        vm.CountsWith(0, "").GetValueOrDefault("谢拉格").Should().Be(0);
+        vm.SetSlotOperator(0, "青枳");
+        vm.ActiveStats.ToDictionary(s => s.Name, s => s.Count).Should().BeEquivalentTo(counts);
     }
 }

@@ -96,8 +96,8 @@ internal static class SklandImportViewTests
             for (var i = 0; i < 11; i++)
             {
                 var card = (FrameworkElement)host.Items[0];
-                Descendants<Button>(card).Single(button => Equals(button.ToolTip, "清空该位置"))
-                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                card.ContextMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "移出阵容"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             }
             host.Items.Count.Should().Be(9);
             ((Button)chooser.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

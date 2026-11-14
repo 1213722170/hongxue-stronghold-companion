@@ -336,6 +336,16 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [Fact]
     public Task LineupRecommendations_FilterAndOpenRepair() => ui.RunAsync(LineupRecommendationViewTests.Verify, nameof(LineupRecommendations_FilterAndOpenRepair));
 
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task EditorRedesign_PickersAndCovenantIcons(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => EditorRedesignViewTests.Verify(theme, night), $"{nameof(EditorRedesign_PickersAndCovenantIcons)}-{theme}-{night}");
+
     [Fact]
     public Task UpdateSettings_TrayAndHotkeys() => ui.RunAsync(UpdateAndTrayTests.Verify, nameof(UpdateSettings_TrayAndHotkeys));
 

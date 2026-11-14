@@ -48,7 +48,8 @@
                 <DockPanel>
                     <Button Style="{StaticResource DialogPrimaryButton}" DockPanel.Dock="Right" Content="完成" Margin="8,0,0,0" Click="OnConfirmClick" />
                     <Button Style="{StaticResource DialogSecondaryButton}" DockPanel.Dock="Right" Content="全部取消" Click="OnClearClick" />
-                    <TextBlock Text="单击加入或移出，可选多个" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock x:Name="HintText" Text="单击加入或移出，可选多个（最多9个）" FontSize="11" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
                 </DockPanel>
             </Border>
             <DockPanel Margin="14,12,14,10">

@@ -294,6 +294,7 @@ public partial class LineupEditorWindow : Window
         DockPanel.SetDock(more, Dock.Right);
         nameRow.Children.Add(more);
         var name = Text(slot.OperatorName, 13, "TextPrimaryBrush", bold: true);
+        name.ToolTip = slot.OperatorName;
         if (isCore)
         {
             var badge = Pill("核心", "core");
@@ -850,8 +851,7 @@ public partial class LineupEditorWindow : Window
 
     private void PickStrategies()
     {
-        var current = ChosenStrategies.Select(s => (s.StrategyId, Tag: s.Tags.Count > 0 ? (StrategyTag?)s.Tags[0] : null)).ToList();
-        var dialog = new StrategyPickerWindow(_strategies, current) { Owner = this };
+        var dialog = new StrategyPickerWindow(_strategies, ChosenStrategies) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         _vm.SetStrategies(dialog.Picked);
         RefreshEditor();

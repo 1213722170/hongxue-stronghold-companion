@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using ASPAssistant.Core.Models;
 using ASPAssistant.Core.Services;
+using ASPAssistant.Core.ViewModels;
 
 namespace ASPAssistant.App.Windows;
 
@@ -25,13 +26,17 @@ public sealed class StrategyPickRow(Strategy strategy) : INotifyPropertyChanged
     public string Summary => $"{Name} · {Initiator}\n初始生命值：{InitialHp}\n{Strategy.Description}";
 
     private bool _chosen;
-    private StrategyTag? _tag;
-    public bool IsChosen { get => _chosen; set { _chosen = value; if (!value) _tag = null; NotifyAll(); } }
-    public StrategyTag? Tag { get => _tag; set { _tag = value; NotifyAll(); } }
-    public bool IsCore { get => _tag == StrategyTag.阵容核心; set => Tag = value ? StrategyTag.阵容核心 : null; }
-    public bool IsPreferred { get => _tag == StrategyTag.优选; set => Tag = value ? StrategyTag.优选 : null; }
-    public bool IsSecond { get => _tag == StrategyTag.次选; set => Tag = value ? StrategyTag.次选 : null; }
-    public string TagText => _tag switch { StrategyTag.阵容核心 => "核心", StrategyTag.优选 => "优选", StrategyTag.次选 => "次选", _ => "" };
+    public List<StrategyTag> Tags { get; } = [];
+    public bool IsChosen { get => _chosen; set { _chosen = value; if (!value) Tags.Clear(); NotifyAll(); } }
+    public StrategyTag? Tag
+    {
+        get => Tags.Count > 0 ? Tags[0] : null;
+        set { Tags.Clear(); if (value is { } tag) Tags.Add(tag); NotifyAll(); }
+    }
+    public bool IsCore { get => Tag == StrategyTag.阵容核心; set => Tag = value ? StrategyTag.阵容核心 : null; }
+    public bool IsPreferred { get => Tag == StrategyTag.优选; set => Tag = value ? StrategyTag.优选 : null; }
+    public bool IsSecond { get => Tag == StrategyTag.次选; set => Tag = value ? StrategyTag.次选 : null; }
+    public string TagText => Tag switch { StrategyTag.阵容核心 => "核心", StrategyTag.优选 => "优选", StrategyTag.次选 => "次选", _ => "" };
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void NotifyAll() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
@@ -44,20 +49,24 @@ public partial class StrategyPickerWindow : Window
     private readonly ObservableCollection<StrategyPickRow> _shown = [];
     private readonly ObservableCollection<StrategyPickRow> _chosen = [];
     // Strategies from shared lineups that are not in the data: kept as they are.
-    private readonly List<(string Id, StrategyTag? Tag)> _unknown = [];
+    private readonly List<(int Index, LineupStrategySlot Slot)> _unknown = [];
 
     /// <summary>The picked strategies in order (set when 完成 is clicked).</summary>
-    public IReadOnlyList<(string Id, StrategyTag? Tag)> Picked { get; private set; } = [];
+    public IReadOnlyList<LineupStrategySlot> Picked { get; private set; } = [];
 
-    public StrategyPickerWindow(IEnumerable<Strategy> strategies, IEnumerable<(string Id, StrategyTag? Tag)> current)
+    public StrategyPickerWindow(IEnumerable<Strategy> strategies, IEnumerable<LineupStrategySlot> current)
     {
         InitializeComponent();
         _rows = [.. strategies.Select(s => new StrategyPickRow(s))];
-        foreach (var (id, tag) in current)
+        foreach (var (slot, index) in current.Select((slot, index) => (slot, index)))
         {
-            if (_rows.FirstOrDefault(r => r.Id == id) is not { } row) { _unknown.Add((id, tag)); continue; }
+            if (_rows.FirstOrDefault(r => r.Id == slot.StrategyId) is not { } row)
+            {
+                _unknown.Add((index, new LineupStrategySlot { StrategyId = slot.StrategyId, Tags = [.. slot.Tags] }));
+                continue;
+            }
             row.IsChosen = true;
-            row.Tag = tag;
+            row.Tags.AddRange(slot.Tags);
             _chosen.Add(row);
         }
         foreach (var row in _rows) row.PropertyChanged += (_, _) => RefreshChosen();
@@ -97,6 +106,12 @@ public partial class StrategyPickerWindow : Window
         if (ItemsControl.ContainerFromElement(ItemsList, e.OriginalSource as DependencyObject) is not ListBoxItem { Content: StrategyPickRow row }) return;
         for (var d = e.OriginalSource as DependencyObject; d is not null && d != ItemsList; d = System.Windows.Media.VisualTreeHelper.GetParent(d))
             if (d is ToggleButton) return;
+        if (!row.IsChosen && _chosen.Count + _unknown.Count >= LineupEditorViewModel.MaxSlots)
+        {
+            HintText.Text = $"最多选择{LineupEditorViewModel.MaxSlots}个策略，请先移出一个";
+            return;
+        }
+        HintText.Text = $"单击加入或移出，可选多个（最多{LineupEditorViewModel.MaxSlots}个）";
         row.IsChosen = !row.IsChosen;
         if (row.IsChosen) _chosen.Add(row);
         else _chosen.Remove(row);
@@ -106,11 +121,14 @@ public partial class StrategyPickerWindow : Window
     {
         foreach (var r in _chosen.ToList()) r.IsChosen = false;
         _chosen.Clear();
+        _unknown.Clear();
     }
 
     private void OnConfirmClick(object sender, RoutedEventArgs e)
     {
-        Picked = [.. _chosen.Select(r => (r.Id, r.Tag)), .. _unknown];
+        var picked = _chosen.Select(r => new LineupStrategySlot { StrategyId = r.Id, Tags = [.. r.Tags] }).ToList();
+        foreach (var (index, slot) in _unknown) picked.Insert(Math.Min(index, picked.Count), slot);
+        Picked = picked;
         DialogResult = true;
     }
 

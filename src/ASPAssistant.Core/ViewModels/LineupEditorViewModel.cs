@@ -142,7 +142,9 @@ public partial class LineupEditorViewModel : ObservableObject
     /// <summary>People per covenant in the current phase with place <paramref name="slotIndex"/> holding <paramref name="operatorName"/> ("" = empty).</summary>
     public IReadOnlyDictionary<string, int> CountsWith(int slotIndex, string operatorName)
     {
-        var slots = Slots.Select((s, i) => i == slotIndex ? new LineupSlot { OperatorName = operatorName } : s)
+        var replacement = CloneSlot(Slots[slotIndex]);
+        replacement.OperatorName = operatorName;
+        var slots = Slots.Select((s, i) => i == slotIndex ? replacement : s)
             .Where(s => s.OperatorName.Length > 0).ToList();
         return _calculator.Compute(new Lineup { Slots = slots }).ToDictionary(s => s.Name, s => s.Count, StringComparer.Ordinal);
     }
@@ -302,12 +304,13 @@ public partial class LineupEditorViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>Replaces the strategies with <paramref name="picked"/> (id + its one tag, or none), keeping 9 places.</summary>
-    public void SetStrategies(IEnumerable<(string Id, StrategyTag? Tag)> picked)
+    /// <summary>Replaces the strategies, preserving their tags and keeping 9 places.</summary>
+    public void SetStrategies(IEnumerable<LineupStrategySlot> picked)
     {
+        var selected = picked.Where(s => s.StrategyId.Length > 0).Take(MaxSlots)
+            .Select(s => new LineupStrategySlot { StrategyId = s.StrategyId, Tags = [.. s.Tags] }).ToList();
         StrategySlots.Clear();
-        foreach (var (id, tag) in picked.Where(p => p.Id.Length > 0).Take(MaxSlots))
-            StrategySlots.Add(new LineupStrategySlot { StrategyId = id, Tags = tag is { } t ? [t] : [] });
+        foreach (var slot in selected) StrategySlots.Add(slot);
         while (StrategySlots.Count < MaxSlots) StrategySlots.Add(new LineupStrategySlot());
         SyncMechSlots();
         OnPropertyChanged(nameof(HasMechStrategy));
