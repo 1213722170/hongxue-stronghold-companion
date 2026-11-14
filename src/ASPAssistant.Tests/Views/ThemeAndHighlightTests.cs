@@ -158,6 +158,104 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [Fact]
     public Task OperatorPicker_PreservesSelectionWhileScrolling() => ui.RunAsync(OperatorPickerTests.VerifySelection, nameof(OperatorPicker_PreservesSelectionWhileScrolling));
 
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task TransientHints_HaveReadableContrast(GameShopTheme theme, bool night) => ui.RunAsync(() =>
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "hint-contrast-" + Guid.NewGuid().ToString("N"));
+        var calculator = new CovenantCalculator([], [], new Dictionary<string, string>());
+        var panel = new SidePanelWindow(new OperatorBrowseViewModel(), new EquipmentBrowseViewModel(),
+            new TrackingViewModel(), new GameStateViewModel(), new BanViewModel(), new EnemyViewModel(),
+            new LineupViewModel(new LineupStore(Path.Combine(folder, "lineups"), calculator.EquipmentRules), calculator),
+            new LineupShareService(calculator.EquipmentRules, Path.Combine(folder, "share")), [], [], [],
+            new SettingsManager(folder), GameShopTheme.Terminal, new SidePanelPositionSettings());
+        var content = (FrameworkElement)panel.Content;
+        panel.Content = null;
+        var host = new Window { Content = content, Width = 280, Height = 900, WindowStyle = WindowStyle.None,
+            Opacity = 0, ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000 };
+        host.Show();
+        ThemeManager.Apply(theme, night);
+        var toast = (Border)panel.FindName("ToastBorder");
+        var toastText = (TextBlock)panel.FindName("ToastText");
+        toastText.Text = "已追踪阵容“示例阵容”：新增 7 干员 / 2 装备";
+        toast.Visibility = Visibility.Visible;
+        toast.Opacity = 1;
+        var tooltip = new ToolTip { Content = "把这套阵容的干员加入追踪" };
+        tooltip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        tooltip.Arrange(new Rect(tooltip.DesiredSize));
+        tooltip.UpdateLayout();
+        var tooltipText = Descendants<TextBlock>(tooltip).Single(t => t.Text == (string)tooltip.Content);
+        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "hint-contrast");
+        Directory.CreateDirectory(output);
+        using var assertions = new FluentAssertions.Execution.AssertionScope();
+        foreach (var (name, picker) in new[]
+        {
+            ("equipment", new SimplePickerDialog([new Equipment { Name = "示例装备", Tier = 3,
+                Normal = new EquipmentVariant { EffectDescription = "提升攻击力。" } }], null, false)),
+            ("strategy", new SimplePickerDialog("选择策略", [new SimplePickerDialog.PickerItem(
+                "example", "示例策略", null, Summary: "示例策略：提升本局阵容的作战能力。")], null))
+        })
+        {
+            var pickerContent = (FrameworkElement)picker.Content;
+            picker.Content = null;
+            new Window { Content = pickerContent, Width = 420, Height = 300, WindowStyle = WindowStyle.None,
+                Opacity = 0, ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000 }.Show();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            var list = (ListBox)picker.FindName("ItemsList");
+            var item = (ListBoxItem)list.ItemContainerGenerator.ContainerFromIndex(0);
+            var summary = (ToolTip)item.ToolTip;
+            summary.PlacementTarget = item;
+            summary.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            summary.Arrange(new Rect(summary.DesiredSize));
+            summary.UpdateLayout();
+            var text = (TextBlock)summary.Content;
+            text.Text.Should().NotBeNullOrEmpty();
+            ((SolidColorBrush)text.Foreground).Color.Should().Be(((SolidColorBrush)tooltip.Foreground).Color,
+                $"{name} summary inherits the readable tooltip text color in {theme}, night={night}");
+            summary.Background.Should().BeSameAs(tooltip.Background);
+            Save(summary, Path.Combine(output, $"{theme}-{night}-{name}-summary.png"));
+        }
+        foreach (var width in new[] { 280, 360 })
+        {
+            host.Width = width;
+            content.Measure(new Size(width, 900));
+            content.Arrange(new Rect(0, 0, width, 900));
+            content.UpdateLayout();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            toast.IsVisible.Should().BeTrue();
+            Save(tooltip, Path.Combine(output, $"{theme}-{night}-{width}-tooltip.png"));
+            var toastPreview = new Border { Width = toast.ActualWidth, Height = toast.ActualHeight, Background = new VisualBrush(toast) };
+            toastPreview.Measure(toast.RenderSize);
+            toastPreview.Arrange(new Rect(toast.RenderSize));
+            Save(toastPreview, Path.Combine(output, $"{theme}-{night}-{width}-toast.png"));
+            var surface = ((SolidColorBrush)panel.FindResource("PanelBackgroundBrush")).Color;
+            foreach (var (text, background) in new[] { (tooltipText, tooltip.Background), (toastText, toast.Background) })
+            {
+                var foreground = ((SolidColorBrush)text.Foreground).Color;
+                var color = ((SolidColorBrush)background).Color;
+                var alpha = color.A / 255.0;
+                var composite = Color.FromRgb((byte)(color.R * alpha + surface.R * (1 - alpha)),
+                    (byte)(color.G * alpha + surface.G * (1 - alpha)), (byte)(color.B * alpha + surface.B * (1 - alpha)));
+                var a = Luminance(foreground);
+                var b = Luminance(composite);
+                var contrast = (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+                contrast.Should().BeGreaterThanOrEqualTo(4.5, $"{theme}, night={night}, width={width}, text={text.Text}");
+            }
+        }
+
+        static double Luminance(Color color)
+        {
+            static double Linear(byte value) => value / 255.0 <= 0.04045
+                ? value / 255.0 / 12.92 : Math.Pow((value / 255.0 + 0.055) / 1.055, 2.4);
+            return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+        }
+    }, $"{nameof(TransientHints_HaveReadableContrast)}-{theme}-{night}");
+
     [Fact]
     public Task LineupEditor_FiltersAndEditsLineups() => ui.RunAsync(LineupFeatureTests.Verify, nameof(LineupEditor_FiltersAndEditsLineups));
 

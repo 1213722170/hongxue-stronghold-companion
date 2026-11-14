@@ -433,7 +433,7 @@
                         IsHitTestVisible="False"
                         Opacity="0">
                     <TextBlock x:Name="ToastText"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               Foreground="{DynamicResource TitleTextBrush}"
                                FontSize="12"
                                TextAlignment="Center"
                                TextWrapping="Wrap" />

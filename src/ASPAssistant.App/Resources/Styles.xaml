@@ -1167,7 +1167,7 @@
     <!-- ── Stock controls in theme colors ─────────────────────────────────── -->
     <Style TargetType="ToolTip">
         <Setter Property="Background" Value="{DynamicResource ToastBackgroundBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TitleTextBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="8,5" />
