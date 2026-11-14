@@ -260,6 +260,9 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     public Task LineupEditor_FiltersAndEditsLineups() => ui.RunAsync(LineupFeatureTests.Verify, nameof(LineupEditor_FiltersAndEditsLineups));
 
     [Fact]
+    public Task CandidateEquipment_PickerEditorAndTracking() => ui.RunAsync(CandidateEquipmentViewTests.Verify, nameof(CandidateEquipment_PickerEditorAndTracking));
+
+    [Fact]
     public Task UpdateSettings_TrayAndHotkeys() => ui.RunAsync(UpdateAndTrayTests.Verify, nameof(UpdateSettings_TrayAndHotkeys));
 
     [Fact]

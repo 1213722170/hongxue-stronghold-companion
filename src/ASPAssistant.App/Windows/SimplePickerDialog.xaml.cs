@@ -59,7 +59,7 @@ public partial class SimplePickerDialog : Window
 
     public SimplePickerDialog(IEnumerable<Equipment> equipment, string operatorName,
         IEnumerable<CandidateEquipment> current, IEnumerable<string> inSlots)
-        : this($"候选装备 · {operatorName}", EquipmentItems(equipment), null, "点一下加入候选，再点切换优先，第三下取消")
+        : this($"候选装备 · {operatorName}", EquipmentItems(equipment), null, "点击：候选 → 优先 → 取消")
     {
         _isCandidatePicker = true;
         _inSlots.UnionWith(inSlots);

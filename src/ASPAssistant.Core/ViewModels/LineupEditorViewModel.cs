@@ -146,7 +146,7 @@ public partial class LineupEditorViewModel : ObservableObject
                 if (slots.LastOrDefault(s => s.OperatorName.Length == 0) is { } empty) slots.Remove(empty);
                 slots.Add(new LineupSlot { OperatorName = LineupEquipmentService.MechName });
             }
-            else if (!HasMechStrategy && mech is not null && mech.Equipments.Count == 0)
+            else if (!HasMechStrategy && mech is not null && mech.Equipments.Count == 0 && mech.CandidateEquipments.Count == 0)
             {
                 slots.Remove(mech);
                 while (slots.Count < MaxSlots) slots.Add(new LineupSlot());
@@ -219,6 +219,7 @@ public partial class LineupEditorViewModel : ObservableObject
         var slot = PreviewTransformation(slotIndex, transformationIndex, equipmentName);
         slot.Equipments.RemoveAll(replacedEquipment.Contains);
         slot.CoreEquipments.RemoveAll(e => !slot.Equipments.Contains(e));
+        slot.CandidateEquipments.RemoveAll(c => slot.Equipments.Contains(c.Name));
         if (slot.Equipments.Count > LineupEquipmentService.Capacity(slot))
             throw new InvalidOperationException("装备位不足，请先选择需要替换的装备");
         Slots[slotIndex] = slot;
@@ -412,9 +413,9 @@ public partial class LineupEditorViewModel : ObservableObject
         UpdatedAt = DateTime.UtcNow,
     };
 
-    // An untouched 暴躁铁皮 slot (no gear) is not worth saving.
+    // An untouched 暴躁铁皮 slot (no gear, candidates or tags) is not worth saving.
     private List<LineupSlot> ExportPhase(LineupPhase phase) => [.. _phaseSlots[phase]
-        .Where(s => !string.IsNullOrEmpty(s.OperatorName) && (!IsMech(s) || s.Equipments.Count > 0 || s.Tags.Count > 0)).Select(CloneSlot)];
+        .Where(s => !string.IsNullOrEmpty(s.OperatorName) && (!IsMech(s) || s.Equipments.Count > 0 || s.CandidateEquipments.Count > 0 || s.Tags.Count > 0)).Select(CloneSlot)];
 
     private static LineupSlot CloneSlot(LineupSlot s) => new()
     {

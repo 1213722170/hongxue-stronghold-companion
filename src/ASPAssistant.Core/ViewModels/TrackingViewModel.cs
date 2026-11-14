@@ -40,6 +40,9 @@ public partial class TrackingViewModel : ObservableObject
         merged.IsElite = origins.Any(o => o.IsElite);
         merged.TransformedCovenant = preferred.TransformedCovenant;
         merged.Equipments = origins.SelectMany(o => o.Equipments).Distinct().ToList();
+        merged.CandidateEquipments = origins.SelectMany(o => o.CandidateEquipments)
+            .Where(c => !merged.Equipments.Contains(c.Name)).GroupBy(c => c.Name)
+            .Select(g => new CandidateEquipment { Name = g.Key, IsPriority = g.Any(c => c.IsPriority) }).ToList();
         merged.Stages = preferred.Role == TrackingRole.Final ? "" : string.Join(" · ", origins.Select(o => o.Stages).Where(s => s.Length > 0).Distinct());
         merged.ExpiresAt = merged.Role == TrackingRole.Final || origins.Any(o => o.ExpiresAt == 0) ? 0 : origins.Max(o => o.ExpiresAt);
         return merged;
@@ -360,6 +363,7 @@ public partial class TrackingViewModel : ObservableObject
         var acquired = Copy(entry, entry.IsExpired);
         acquired.IsAcquired = true;
         entries[entries.IndexOf(entry)] = acquired;
+        if (entry.Type == TrackingType.Equipment) RemoveCandidateRequirement(name);
         if (entry.Type == TrackingType.Operator) RefreshEquipmentRequirements();
     }
 
@@ -384,18 +388,30 @@ public partial class TrackingViewModel : ObservableObject
 
     private void RemoveEquipmentRequirement(string name)
     {
-        foreach (var entry in TrackedOperators.Where(e => e.Equipments.Contains(name) || e.CandidateEquipments.Any(c => c.Name == name)).ToList())
+        RemoveCandidateRequirement(name);
+        foreach (var entry in TrackedOperators.Where(e => e.Equipments.Contains(name)).ToList())
         {
             var without = Copy(entry, entry.IsExpired);
             without.Equipments = entry.Equipments.Where(e => e != name).ToList();
             without.Origins = entry.Origins.Select(o => o with { Equipments = o.Equipments.Where(e => e != name).ToList() }).ToList();
-            without.CandidateEquipments.RemoveAll(c => c.Name == name);
             TrackedOperators[TrackedOperators.IndexOf(entry)] = without;
         }
     }
 
-    private static bool SameCandidates(IReadOnlyList<CandidateEquipment> a, IReadOnlyList<CandidateEquipment> b)
-        => a.Count == b.Count && a.Zip(b).All(p => p.First.Name == p.Second.Name && p.First.IsPriority == p.Second.IsPriority);
+    private void RemoveCandidateRequirement(string name)
+    {
+        foreach (var entry in TrackedOperators.Where(e => e.CandidateEquipments.Any(c => c.Name == name)
+            || e.Origins.Any(o => o.CandidateEquipments.Any(c => c.Name == name))).ToList())
+        {
+            var without = Copy(entry, entry.IsExpired);
+            without.CandidateEquipments.RemoveAll(c => c.Name == name);
+            without.Origins = entry.Origins.Select(o => o with
+            {
+                CandidateEquipments = o.CandidateEquipments.Where(c => c.Name != name).ToList()
+            }).ToList();
+            TrackedOperators[TrackedOperators.IndexOf(entry)] = without;
+        }
+    }
 
     /// <summary>Operators who want <paramref name="equipment"/>, and how (for the tracking list's subtitle).</summary>
     public IReadOnlyList<(string Operator, TrackedEquipmentKind Kind)> EquipmentWanters(string equipment)

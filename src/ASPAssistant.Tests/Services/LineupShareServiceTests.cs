@@ -72,6 +72,8 @@ public class LineupShareServiceTests : IDisposable
     [InlineData("strategy")]
     [InlineData("strategyTag")]
     [InlineData("sourceUrl")]
+    [InlineData("candidateEquipment")]
+    [InlineData("candidatePriority")]
     public async Task ChangedContentGetsNewLinkAndReturningToOriginalReusesItsLink(string change)
     {
         using var handler = new ShareHandler();
@@ -79,7 +81,8 @@ public class LineupShareServiceTests : IDisposable
         var service = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
         var lineup = new Lineup
         {
-            Name = "炎队", Slots = [new() { OperatorName = "角峰", Equipments = ["坚守盾牌"] }],
+            Name = "炎队", Slots = [new() { OperatorName = "角峰", Equipments = ["坚守盾牌"],
+                CandidateEquipments = [new() { Name = "不退者之盾" }] }],
             Strategies = [new() { StrategyId = "band_mech" }]
         };
         var originalJson = JsonSerializer.Serialize(lineup);
@@ -99,6 +102,8 @@ public class LineupShareServiceTests : IDisposable
             case "strategy": lineup.Strategies[0].StrategyId = "band_amiya"; break;
             case "strategyTag": lineup.Strategies[0].Tags.Add(StrategyTag.优选); break;
             case "sourceUrl": lineup.SourceUrl = SklandGuideImporterTests.Url; break;
+            case "candidateEquipment": lineup.Slots[0].CandidateEquipments.Add(new() { Name = "歌利亚头盔" }); break;
+            case "candidatePriority": lineup.Slots[0].CandidateEquipments[0].IsPriority = true; break;
         }
 
         (await service.ExportAsync(lineup)).Should().NotBe(originalUrl);
@@ -200,7 +205,8 @@ public class LineupShareServiceTests : IDisposable
     [Fact]
     public async Task RawJsonContainingUrlRemainsJsonAndExportPayloadKeepsOriginalFormat()
     {
-        var lineup = new Lineup { Name = "https://dpaste.com/NAME", EarlySlots = [new() { OperatorName = "角峰" }] };
+        var lineup = new Lineup { Name = "https://dpaste.com/NAME", EarlySlots = [new() { OperatorName = "角峰",
+            CandidateEquipments = [new() { Name = "歌利亚头盔", IsPriority = true }, new() { Name = "不退者之盾" }] }] };
         using var handler = new ShareHandler(async (request, _) =>
         {
             request.Method.Should().Be(HttpMethod.Post);
