@@ -114,6 +114,7 @@ __pycache__/
 MODIFICATIONS.md
 
 # Local screenshot regression fixtures (excluded from public CI)
+/src/ASPAssistant.Tests/TestData/ui90-1600/
 /src/ASPAssistant.Tests/TestData/4k-scale90/商店冻结.png
 /src/ASPAssistant.Tests/TestData/4k-scale90/商店普通.png
 /src/ASPAssistant.Tests/TestData/4k-scale90/局内信息.png

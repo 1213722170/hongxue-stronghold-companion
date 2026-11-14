@@ -82,6 +82,29 @@ public class ShopEconomyReaderTests(ShopReaderFixture fixture) : IClassFixture<S
 public class ShopEconomyNumberTests
 {
     [Theory]
+    [InlineData("🎆终极模拟", "终极模拟")]
+    [InlineData("◆ 险境模拟", "险境模拟")]
+    [InlineData("终极模拟", "终极模拟")]
+    [InlineData("★规程等级7", "规程等级7")]
+    [InlineData("说明终极模拟", null)]
+    [InlineData("A终极模拟", null)]
+    [InlineData("1终极模拟", null)]
+    [InlineData("终极模拟说明", null)]
+    public async Task ModeAllowsLeadingIconButRejectsOtherWords(string text, string? expected)
+    {
+        var ocr = new Mock<IOcrEngine>();
+        ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(Array.Empty<OcrTextResult>());
+        ocr.Setup(e => e.RecognizeLineAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(Array.Empty<OcrTextResult>());
+        ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 0, 0, 1152, 97))
+            .ReturnsAsync([new(text, (150, 20, 200, 40)), new("回合??", (600, 20, 100, 40))]);
+        var read = await new ShopEconomyReader(ocr.Object).ReadAsync([], 1920, 1080);
+        read.Mode.Should().Be(expected);
+        read.Round.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData("⑤", 5)]
     [InlineData("⓪", 0)]
     [InlineData("⑩", 10)]

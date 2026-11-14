@@ -32,7 +32,7 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
     private const double BadgeHeight = 38;
 
     private static readonly Regex RoundInline = new(@"回合\D{0,2}(\d{1,2})$", RegexOptions.Compiled);
-    private static readonly Regex ModeName = new(@"^(规程等级\d{1,2}|[一-龥]{2}模拟)$", RegexOptions.Compiled);
+    private static readonly Regex ModeName = new(@"^[^\p{L}\p{N}]*(规程等级\d{1,2}|[一-龥]{2}模拟)$", RegexOptions.Compiled);
 
     public async Task<ShopEconomy> ReadAsync(byte[] png, int width, int height)
     {
@@ -99,7 +99,7 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
     private async Task<(int? Round, string? Mode, bool Preparation)> ReadTopAsync(byte[] png, int width, int height, double s)
     {
         var top = await ocr.RecognizeRegionAsync(png, 0, 0, (int)(width * 0.6), (int)(height * 0.09));
-        string? mode = top.Select(t => t.Text.Trim()).FirstOrDefault(t => ModeName.IsMatch(t));
+        string? mode = top.Select(t => ModeName.Match(t.Text.Trim())).FirstOrDefault(m => m.Success)?.Groups[1].Value;
         bool preparation = top.Any(t => t.Text.Contains("休息", StringComparison.Ordinal) || t.Text.Contains("休整", StringComparison.Ordinal));
 
         int? round = null;
