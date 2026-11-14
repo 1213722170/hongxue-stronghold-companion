@@ -371,6 +371,16 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [Fact]
     public Task Codex_PreservesFiltersAndNavigation() => ui.RunAsync(ClearAndLineupSourceViewTests.VerifyCodex, nameof(Codex_PreservesFiltersAndNavigation));
 
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task RunInfo_BansAndEnemyRemainUsable(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => RunInfoViewTests.Verify(theme, night), $"{nameof(RunInfo_BansAndEnemyRemainUsable)}-{theme}-{night}");
+
     [Fact]
     public Task ClearInputs_PreserveLineupSources() => ui.RunAsync(ClearAndLineupSourceViewTests.Verify, nameof(ClearInputs_PreserveLineupSources));
 
@@ -434,7 +444,8 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                 var operators = store.LoadOperatorsAsync().GetAwaiter().GetResult();
                 vm.LoadOperators(operators.Where(o => o.RequiredStrategyId.Length == 0).ToList());
                 var view = new OperatorBrowseView { DataContext = vm };
-                view.ClearRunRequested += () => vm.ClearCovenantHighlights();
+                var runView = new RunBanView { DataContext = vm };
+                runView.ClearRunRequested += () => vm.ClearCovenantHighlights();
                 host.Content = view;
                 var toggle = (System.Windows.Controls.Primitives.ToggleButton)view.FindName("FilterToggle");
                 toggle.IsChecked = true;
@@ -548,7 +559,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                     Save(view, Path.Combine(output, isLight ? "light.png" : "dark.png"));
                     Save(tooltip, Path.Combine(output, isLight ? "light-details.png" : "dark-details.png"));
 
-                    ((Button)view.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    ((MenuItem)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                     Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
                     vm.HighlightedCovenants.Should().BeEmpty();
                     item.IsSelected.Should().BeTrue();

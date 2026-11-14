@@ -52,7 +52,7 @@ internal static class ClearAndLineupSourceViewTests
             var segment = (ListBox)panel.FindName("CodexSegment");
             var operatorView = (OperatorBrowseView)panel.FindName("OperatorView");
             var equipmentView = (EquipmentBrowseView)panel.FindName("EquipmentView");
-            tabs.Items.OfType<TabItem>().Select(t => t.Header).Should().Equal("图鉴", "追踪", "阵容", "敌人");
+            tabs.Items.OfType<TabItem>().Select(t => t.Header).Should().Equal("图鉴", "追踪", "阵容", "对局信息");
             segment.SelectedIndex.Should().Be(0);
             operatorView.Visibility.Should().Be(Visibility.Visible);
             equipmentView.Visibility.Should().Be(Visibility.Collapsed);
@@ -148,13 +148,13 @@ internal static class ClearAndLineupSourceViewTests
             panel.PlannerVm.CurrentTerminalLevel.Should().Be(4);
             tracking.ResetTerminalLevel();
 
-            var operatorView = (OperatorBrowseView)panel.FindName("OperatorView");
+            var runView = (RunBanView)panel.FindName("RunBanView");
             bans.SetBans(["甲"]);
             bans.SetCovenantBans(["炎"]);
             bans.ToggleBan("乙");
             operatorVm.SelectedAvailabilityFilter = AvailabilityFilter.Available;
             operatorVm.SetAvailableCovenants(["维多利亚"]);
-            ((MenuItem)operatorView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ((MenuItem)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEquivalentTo("乙");
             bans.BannedCovenants.Should().BeEmpty();
@@ -162,7 +162,7 @@ internal static class ClearAndLineupSourceViewTests
             panel.PlannerVm.HasRunInfo.Should().BeFalse();
             operatorVm.FilteredOperators.Should().Contain(o => o.Name == "甲").And.NotContain(o => o.Name == "乙");
             bans.SetCovenantBans(["炎"]);
-            ((MenuItem)operatorView.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ((MenuItem)runView.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEmpty();
             bans.BannedCovenants.Should().BeEmpty();
