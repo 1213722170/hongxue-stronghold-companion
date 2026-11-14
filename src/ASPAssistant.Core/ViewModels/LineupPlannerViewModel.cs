@@ -404,7 +404,7 @@ public partial class LineupPlannerViewModel : ObservableObject
         _routePlanner = new LineupRoutePlanner(_operators, planner.Covenants);
         _operatorByName = _operators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         _allOperatorIcons = operators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First().IconPath, StringComparer.Ordinal);
-        foreach (var c in planner.Covenants)
+        foreach (var c in planner.Covenants.Where(c => c.Name != "绝技"))
             (c.BondType == "SEASON" ? CoreCovenants : ExtraCovenants).Add(new PlannerCovenantItem(c, OnToggleLevel,
                 _equipmentRules.CanTransformInto(c.Name) && !LineupPlanner.NoTransform.Contains(c.Name)));
         foreach (var p in PeopleOptions)

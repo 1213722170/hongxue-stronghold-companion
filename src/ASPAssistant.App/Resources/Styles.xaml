@@ -1220,16 +1220,31 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <Border x:Name="bg" Background="Transparent" CornerRadius="{DynamicResource RowCornerRadius}" Padding="10,5" MinWidth="120">
-                        <DockPanel>
-                            <!-- tick for checkable items (e.g. 只看本局盟约) -->
-                            <Path x:Name="check" DockPanel.Dock="Right" Width="10" Height="8" Margin="12,0,0,0" VerticalAlignment="Center"
-                                  Stretch="Uniform" Data="M 2.5 7 L 5.5 10 L 11 3.5" StrokeThickness="1.8" Visibility="Collapsed"
-                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stroke="{DynamicResource AccentBrush}" />
-                            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
-                        </DockPanel>
-                    </Border>
+                    <Grid>
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="{DynamicResource RowCornerRadius}" Padding="10,5" MinWidth="120">
+                            <DockPanel>
+                                <Path x:Name="submenuArrow" DockPanel.Dock="Right" Width="4" Height="8" Margin="12,0,0,0" VerticalAlignment="Center"
+                                      Data="M 0 0 L 4 4 L 0 8" StrokeThickness="1.4" Visibility="Collapsed"
+                                      Stroke="{TemplateBinding Foreground}" />
+                                <!-- tick for checkable items (e.g. 只看本局盟约) -->
+                                <Path x:Name="check" DockPanel.Dock="Right" Width="10" Height="8" Margin="12,0,0,0" VerticalAlignment="Center"
+                                      Stretch="Uniform" Data="M 2.5 7 L 5.5 10 L 11 3.5" StrokeThickness="1.8" Visibility="Collapsed"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stroke="{DynamicResource AccentBrush}" />
+                                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
+                            </DockPanel>
+                        </Border>
+                        <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="-1" AllowsTransparency="True" Focusable="False"
+                               PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}" IsOpen="{TemplateBinding IsSubmenuOpen}">
+                            <Border Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="{DynamicResource RowCornerRadius}" Padding="3">
+                                <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </Border>
+                        </Popup>
+                    </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="submenuArrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="check" Property="Visibility" Value="Visible" />
                         </Trigger>

@@ -161,16 +161,11 @@ internal static class EditorRedesignViewTests
             Run(target, wide, () =>
             {
                 var icons = Descendants<CovenantIcon>(target).ToList();
-                icons.Should().HaveCount(26);
+                icons.Should().HaveCount(25);
+                icons.Should().NotContain(icon => icon.Covenant == "绝技");
                 foreach (var icon in icons)
                 {
                     var glyph = Descendants<Border>(icon).Single();
-                    if (icon.Covenant == "绝技")
-                    {
-                        glyph.Visibility.Should().Be(Visibility.Collapsed);
-                        Descendants<TextBlock>(icon).Single().Text.Should().Be("绝");
-                        continue;
-                    }
                     glyph.OpacityMask.Should().BeOfType<ImageBrush>();
                     glyph.Visibility.Should().Be(Visibility.Visible);
                     var bitmap = new RenderTargetBitmap((int)icon.ActualWidth, (int)icon.ActualHeight, 96, 96, PixelFormats.Pbgra32);

@@ -36,7 +36,7 @@ public partial class TargetPickerWindow : Window
         _infos = covenants.ToDictionary(c => c.Name, StringComparer.Ordinal);
         _existing = existing.ToDictionary(t => t.Name, t => t.Tier, StringComparer.Ordinal);
         foreach (var c in covenants.Where(c => c.BondType == "SEASON")) CoreGrid.Children.Add(Cell(c.Name));
-        foreach (var c in covenants.Where(c => c.BondType != "SEASON").OrderByDescending(c => late.GetValueOrDefault(c.Name)))
+        foreach (var c in covenants.Where(c => c.BondType != "SEASON" && c.Name != "绝技").OrderByDescending(c => late.GetValueOrDefault(c.Name)))
             ExtraGrid.Children.Add(Cell(c.Name));
     }
 

@@ -355,9 +355,9 @@ public partial class LineupEditorWindow : Window
             var target = new MenuItem { Header = phase.ToString() };
             target.Click += (_, _) =>
             {
-                if (!_vm.CopySlotToPhase(slotIndex, phase))
-                    EditorHint.Text = $"{phase}已满，没有复制";
+                var copied = _vm.CopySlotToPhase(slotIndex, phase);
                 RefreshEditor();
+                EditorHint.Text = copied ? $"{slot.OperatorName}已复制到{phase}" : $"{phase}已满，没有复制";
             };
             copy.Items.Add(target);
         }
