@@ -51,6 +51,59 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     }
 
     [Fact]
+    public Task EnemyHp_FocusesRecognizedDifficulty() => ui.RunAsync(() =>
+    {
+        var bosses = new BossDataService();
+        bosses.LoadAsync(Path.Combine(AppContext.BaseDirectory, "TestData", "Regulation")).GetAwaiter().GetResult();
+        var boss = bosses.Lookup("假想敌：胄")!;
+        var vm = new EnemyViewModel();
+        vm.Update(new(boss.Name, ["特训敌人·元素"], []), boss, [new() { TypeName = "元素" }]);
+        var view = new EnemyView { DataContext = vm };
+        var current = (Border)view.FindName("CurrentBossHpCard");
+        var currentText = (TextBlock)view.FindName("CurrentBossHpText");
+        var other = (Expander)view.FindName("OtherBossHpExpander");
+        var items = (ItemsControl)view.FindName("SingleBossHpItems");
+        foreach (var theme in Enum.GetValues<GameShopTheme>())
+        foreach (var night in new[] { false, true })
+        foreach (var width in new[] { 280, 360 })
+        {
+            void Layout()
+            {
+                Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                view.Measure(new Size(width, 1400));
+                view.Arrange(new Rect(0, 0, width, 1400));
+                view.UpdateLayout();
+            }
+            ThemeManager.Apply(theme, night);
+            vm.RegulationLevel = null;
+            Layout();
+            current.Visibility.Should().Be(Visibility.Collapsed);
+            other.IsExpanded.Should().BeTrue();
+            items.Items.Count.Should().Be(21);
+            vm.RegulationLevel = 7;
+            Layout();
+            current.Visibility.Should().Be(Visibility.Visible);
+            currentText.Text.Should().Be(BossHpCell.From(boss.Hp.Single(hp => hp.Mode == "mode_single_7")).Hp);
+            other.IsExpanded.Should().BeFalse();
+            other.Header.Should().Be("其他难度血量");
+            items.Items.Count.Should().Be(20);
+            var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "boss-hp-focus");
+            Directory.CreateDirectory(output);
+            var bitmap = new RenderTargetBitmap(width, 1400, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(view);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var file = File.Create(Path.Combine(output, $"{theme}-{night}-{width}.png"))) encoder.Save(file);
+            other.IsExpanded = true;
+            vm.OtherBossHpExpanded.Should().BeTrue();
+            vm.RegulationLevel = 8;
+            Layout();
+            other.IsExpanded.Should().BeFalse();
+            currentText.Text.Should().Be(BossHpCell.From(boss.Hp.Single(hp => hp.Mode == "mode_single_8")).Hp);
+        }
+    }, nameof(EnemyHp_FocusesRecognizedDifficulty));
+
+    [Fact]
     public Task OperatorPicker_PreservesSelectionWhileScrolling() => ui.RunAsync(OperatorPickerTests.VerifySelection, nameof(OperatorPicker_PreservesSelectionWhileScrolling));
 
     [Fact]

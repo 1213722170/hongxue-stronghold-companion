@@ -14,6 +14,11 @@ public class OcrScannerService : IDisposable
     private readonly IOcrStrategy _ocrStrategy;
     private readonly ShopReader _shopReader;
     private readonly IOcrEngine _ocrEngine;
+    private readonly RegulationLevelReader _regulationReader;
+    private readonly object _regulationLock = new();
+    private int? _regulationLevel;
+    private int _regulationRevision;
+    private DateTime _nextRegulationRead = DateTime.MinValue;
     private readonly GameState.GameState _gameState;
     private readonly IReadOnlyList<string> _shopNames;
     private readonly Timer _scanTimer;
@@ -34,6 +39,20 @@ public class OcrScannerService : IDisposable
     private const int BanLostThreshold   = 3;
 
     public event Action<GameState.GameState>? GameStateUpdated;
+
+    public event Action? RegulationLevelChanged;
+    public int? RegulationLevel { get { lock (_regulationLock) return _regulationLevel; } }
+
+    public void ResetRegulationLevel()
+    {
+        lock (_regulationLock)
+        {
+            _regulationRevision++;
+            _regulationLevel = null;
+            _nextRegulationRead = DateTime.MinValue;
+        }
+        RegulationLevelChanged?.Invoke();
+    }
 
     /// <summary>Raised when the (confirmed) terminal level read from the shop's upgrade card changes.</summary>
     public event Action<int>? TerminalLevelChanged;
@@ -101,6 +120,7 @@ public class OcrScannerService : IDisposable
         _ocrStrategy = ocrStrategy;
         _shopReader = shopReader;
         _ocrEngine = ocrEngine;
+        _regulationReader = new RegulationLevelReader(ocrEngine);
         _informationDetector = new InformationScreenDetector(ocrEngine, ocrStrategy);
         _gameState = gameState;
         _shopNames = shopNames;
@@ -151,9 +171,12 @@ public class OcrScannerService : IDisposable
                 _informationState = new InformationScreenState();
                 _banScreenActive = false;
                 _banScreenAbsentTicks = 0;
+                ResetRegulationLevel();
                 _gameState.ShopItems = [];
                 GameStateUpdated?.Invoke(_gameState);
             }
+            int regulationRevision;
+            lock (_regulationLock) regulationRevision = _regulationRevision;
             var screenshot = _captureScreen();
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
             if (screenshot == null)
@@ -182,6 +205,10 @@ public class OcrScannerService : IDisposable
 
             if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
 
+            if (!_pauseBanScreenDetection)
+                await ReadRegulationLevelAsync(screenshot, imgWidth, imgHeight, connection, regulationRevision);
+            if (!ReferenceEquals(connection, _getConnection?.Invoke())) return;
+
             if (_pauseBanScreenDetection || _banScreenActive)
             {
                 PublishShopItems([]);
@@ -207,6 +234,25 @@ public class OcrScannerService : IDisposable
         {
             Interlocked.Exchange(ref _scanning, 0);
         }
+    }
+
+    private async Task ReadRegulationLevelAsync(byte[] screenshot, int width, int height,
+        GameConnectionService? connection, int revision)
+    {
+        lock (_regulationLock)
+        {
+            if (revision != _regulationRevision || DateTime.UtcNow < _nextRegulationRead) return;
+        }
+        var level = await _regulationReader.ReadAsync(screenshot, width, height);
+        lock (_regulationLock)
+        {
+            if (revision != _regulationRevision || _pauseBanScreenDetection
+                || !ReferenceEquals(connection, _getConnection?.Invoke())) return;
+            _nextRegulationRead = DateTime.UtcNow.AddSeconds(3);
+            if (level is null) return;
+            _regulationLevel = level;
+        }
+        RegulationLevelChanged?.Invoke();
     }
 
     private void ReadGameTheme(byte[] screenshot)

@@ -13,6 +13,142 @@ namespace ASPAssistant.Tests.Services;
 public class OcrScannerServiceTests
 {
     [Fact]
+    public async Task DifficultyIsReadOnTheOpeningEvenWhenTheShopScanIsSuppressed()
+    {
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 480, 0, 960, 108))
+            .ReturnsAsync([new("确认本局信息", (600, 20, 200, 30))]);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 38, 388, 1344, 367))
+            .ReturnsAsync([new("附加盟约", (100, 440, 200, 30))]);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .ReturnsAsync([new("规程等级7", (160, 40, 150, 25))]);
+        using var scanner = CreateScanner(() => _screenshot, new());
+        await scanner.ScanNowAsync();
+        scanner.RegulationLevel.Should().Be(7);
+        _ocr.Verify(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 0, 0, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DifficultySurvivesCaptureLossAndResetsBeforeTheNextRun()
+    {
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .ReturnsAsync([new("规程等级7", (160, 40, 150, 25))]);
+        byte[]? shot = _screenshot;
+        using var scanner = CreateScanner(() => shot, new());
+        var levels = new List<int?>();
+        scanner.RegulationLevelChanged += () => levels.Add(scanner.RegulationLevel);
+        await scanner.ScanNowAsync();
+        shot = null;
+        await scanner.ScanNowAsync();
+        scanner.RegulationLevel.Should().Be(7);
+        scanner.ResetRegulationLevel();
+        scanner.RegulationLevel.Should().BeNull();
+        shot = _screenshot;
+        await scanner.ScanNowAsync();
+        levels.Should().Equal(7, null, 7);
+        _ocr.Verify(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task PeriodicDifficultyCorrectsADifferentManualReadWithoutRecollapsingAnUnchangedLevel()
+    {
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .ReturnsAsync([new("规程等级7", (160, 40, 150, 25))]);
+        using var scanner = CreateScanner(() => _screenshot, new());
+        var vm = new EnemyViewModel();
+        vm.Update(new("假想敌：胄", [], []),
+            new() { Hp = [new() { Name = "规程等级7", Group = "single", Hp = 400000 }] }, []);
+        scanner.RegulationLevelChanged += () => vm.RegulationLevel = scanner.RegulationLevel;
+        await scanner.ScanNowAsync();
+        vm.OtherBossHpExpanded = true;
+        await Task.Delay(TimeSpan.FromSeconds(3.1));
+        await scanner.ScanNowAsync();
+        vm.OtherBossHpExpanded.Should().BeTrue("an unchanged confirmed level must preserve manual expansion");
+        vm.RegulationLevel = 8;
+        await Task.Delay(TimeSpan.FromSeconds(3.1));
+        await scanner.ScanNowAsync();
+        vm.RegulationLevel.Should().Be(7);
+        vm.HasCurrentBossHp.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task NewRunRejectsADifficultyReadStartedBeforeTheReset()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<OcrTextResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .Returns(() => { entered.TrySetResult(); return release.Task; });
+        using var scanner = CreateScanner(() => _screenshot, new());
+        var scan = scanner.ScanNowAsync();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            scanner.ResetRegulationLevel();
+        }
+        finally
+        {
+            release.TrySetResult([new("规程等级7", (160, 40, 150, 25))]);
+            await scan;
+        }
+        scanner.RegulationLevel.Should().BeNull();
+        await scanner.ScanNowAsync();
+        scanner.RegulationLevel.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task NewRunRejectsTheFrameCapturedBeforeOpeningDetectionCompletes()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<OcrTextResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 480, 0, 960, 108))
+            .Returns(() => { entered.TrySetResult(); return release.Task; });
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .ReturnsAsync([new("规程等级7", (160, 40, 150, 25))]);
+        using var scanner = CreateScanner(() => _screenshot, new());
+        var scan = scanner.ScanNowAsync();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            scanner.ResetRegulationLevel();
+        }
+        finally
+        {
+            release.TrySetResult([]);
+            await scan;
+        }
+        scanner.RegulationLevel.Should().BeNull();
+        _ocr.Verify(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129), Times.Never);
+        await scanner.ScanNowAsync();
+        scanner.RegulationLevel.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task SwitchingCaptureConnectionRejectsThePreviousDifficulty()
+    {
+        using var previous = new GameConnectionService();
+        using var next = new GameConnectionService(new() { Source = GameCaptureSource.Adb });
+        var connection = previous;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<OcrTextResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ocr.Setup(e => e.RecognizeRegionAsync(It.IsAny<byte[]>(), 134, 0, 480, 129))
+            .Returns(() => { entered.TrySetResult(); return release.Task; });
+        using var scanner = CreateScanner(() => _screenshot, new(), () => connection);
+        var scan = scanner.ScanNowAsync();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            connection = next;
+        }
+        finally
+        {
+            release.TrySetResult([new("规程等级7", (160, 40, 150, 25))]);
+            await scan;
+        }
+        scanner.RegulationLevel.Should().BeNull();
+        await scanner.ScanNowAsync();
+        scanner.RegulationLevel.Should().Be(7);
+    }
+
+    [Fact]
     public async Task FirstAutomaticScanKeepsTheRunAlreadyStartedByManualRecording()
     {
         using var connection = new GameConnectionService();

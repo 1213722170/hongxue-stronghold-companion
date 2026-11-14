@@ -7,6 +7,56 @@ namespace ASPAssistant.Tests.ViewModels;
 
 public class BossHpTests
 {
+    [Fact]
+    public void RecognizedDifficultyShowsItsHpAndCollapsesOnlyTheOtherLevels()
+    {
+        var vm = new EnemyViewModel { RegulationLevel = 7 };
+        var boss = new BossInfo
+        {
+            Hp = [new() { Name = "规程等级7", Group = "single", Hp = 400000, HiddenHp = 800000 },
+                  new() { Name = "规程等级8", Group = "single", Hp = 500000 }]
+        };
+        vm.Update(new("假想敌：胄", ["特训敌人·元素"], []), boss, [new()]);
+        vm.CurrentBossHp.Should().Be(new BossHpCell("7", "规程等级7", "40 万", "80 万"));
+        vm.OtherBossHpExpanded.Should().BeFalse();
+        vm.OtherBossHpSingle.Select(cell => cell.Label).Should().Equal("8");
+        vm.OtherBossHpExpanded = true;
+        vm.RegulationLevel = 8;
+        vm.CurrentBossHp!.Hp.Should().Be("50 万");
+        vm.OtherBossHpExpanded.Should().BeFalse();
+        vm.OtherBossHpSingle.Select(cell => cell.Label).Should().Equal("7");
+        vm.RegulationLevel = null;
+        vm.HasCurrentBossHp.Should().BeFalse();
+        vm.OtherBossHpExpanded.Should().BeTrue();
+        vm.OtherBossHpSingle.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ManualDifficultyReplacesTheCurrentLevelAndIncompleteEnemyRetryKeepsIt()
+    {
+        var vm = new EnemyViewModel { RegulationLevel = 8 };
+        var boss = new BossInfo { Hp = [new() { Name = "规程等级7", Group = "single", Hp = 400000 }] };
+        vm.Update(new("假想敌：胄", ["特训敌人·元素"], []) { RegulationLevel = 7 }, boss, [new()]);
+        vm.RegulationLevel.Should().Be(7);
+        vm.HasCurrentBossHp.Should().BeTrue();
+        vm.Update(new("", [], []), null, []);
+        vm.CurrentBossHp!.Hp.Should().Be("40 万");
+        vm.RegulationLevel.Should().Be(7);
+        vm.Update(new("假想敌：胄", ["特训敌人·元素"], []), boss, [new()]);
+        vm.HasCurrentBossHp.Should().BeTrue("a missed difficulty label must keep this run's confirmed level");
+    }
+
+    [Fact]
+    public void MissingHpForTheDetectedLevelKeepsTheFullTableOpen()
+    {
+        var vm = new EnemyViewModel();
+        vm.Update(new("假想敌：胄", [], []) { RegulationLevel = 7 },
+            new() { Hp = [new() { Name = "规程等级1", Group = "single", Hp = 100000 }] }, []);
+        vm.HasCurrentBossHp.Should().BeFalse();
+        vm.OtherBossHpExpanded.Should().BeTrue();
+        vm.OtherBossHpSingle.Should().ContainSingle();
+    }
+
     [Theory]
     [InlineData(283680, "28.4 万")]
     [InlineData(1182000, "118 万")]

@@ -80,6 +80,29 @@ public partial class EnemyViewModel : ObservableObject
     [ObservableProperty]
     private bool _bossHasHiddenForm;
 
+    [ObservableProperty]
+    private int? _regulationLevel;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCurrentBossHp))]
+    private BossHpCell? _currentBossHp;
+
+    public bool HasCurrentBossHp => CurrentBossHp is not null;
+    public IEnumerable<BossHpCell> OtherBossHpSingle => BossHpSingle.Where(cell => cell != CurrentBossHp);
+
+    [ObservableProperty]
+    private bool _otherBossHpExpanded = true;
+
+    partial void OnRegulationLevelChanged(int? value) => RefreshCurrentBossHp();
+
+    private void RefreshCurrentBossHp()
+    {
+        CurrentBossHp = RegulationLevel is { } level
+            ? BossHpSingle.FirstOrDefault(cell => cell.Label == level.ToString()) : null;
+        OtherBossHpExpanded = CurrentBossHp is null;
+        OnPropertyChanged(nameof(OtherBossHpSingle));
+    }
+
     // ── Enemy type detail cards (populated from EnemyTypeDataService) ──────────
 
     /// <summary>
@@ -105,6 +128,7 @@ public partial class EnemyViewModel : ObservableObject
         BossHpSingle.Clear();
         BossHpMulti.Clear();
         BossHasHiddenForm = false;
+        RefreshCurrentBossHp();
         EnemyTypeDetails.Clear();
         UnmatchedEntries.Clear();
         RawTexts.Clear();
@@ -158,6 +182,8 @@ public partial class EnemyViewModel : ObservableObject
         foreach (var level in bossInfo?.Hp ?? [])
             (level.Group == "multi" ? BossHpMulti : BossHpSingle).Add(BossHpCell.From(level));
         BossHasHiddenForm = bossInfo?.Hp.Any(l => l.HiddenHp is not null) == true;
+        RegulationLevel = result.RegulationLevel ?? RegulationLevel;
+        RefreshCurrentBossHp();
         AvatarPath = string.IsNullOrWhiteSpace(bossInfo?.IconPath)
             ? null
             : bossInfo!.IconPath.Trim();
