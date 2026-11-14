@@ -1,6 +1,7 @@
 // Added for ASP Assistant Arknights on 2026-11-13; see NOTICE.
 // The reading regions follow StrongholdAssistant's EconomyReader (LBEILC/StrongholdAssistant, Apache-2.0).
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace ASPAssistant.Core.Services;
 
@@ -120,8 +121,8 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
     /// <summary>A 1–3 digit number made of the line's text; common OCR slips (O→0, l/I→1) are fixed.</summary>
     public static int? Number(IReadOnlyList<OcrTextResult> line)
     {
-        var text = string.Concat(line.Select(t => t.Text)).Trim()
+        var text = string.Concat(line.Select(t => t.Text)).Trim().Normalize(NormalizationForm.FormKC)
             .Replace('O', '0').Replace('o', '0').Replace('l', '1').Replace('I', '1').Replace('|', '1');
-        return Regex.IsMatch(text, @"^\d{1,3}$") ? int.Parse(text) : null;
+        return Regex.IsMatch(text, @"^[0-9]{1,3}$") ? int.Parse(text) : null;
     }
 }
