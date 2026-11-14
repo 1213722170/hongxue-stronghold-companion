@@ -165,6 +165,77 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [InlineData(GameShopTheme.Ursus, true)]
     [InlineData(GameShopTheme.Closure, false)]
     [InlineData(GameShopTheme.Closure, true)]
+    public Task PlannerChrome_HasReadableContrast(GameShopTheme theme, bool night) => ui.RunAsync(() =>
+    {
+        var data = new JsonDataStore(Path.Combine(AppContext.BaseDirectory, "TestData", "Regulation"));
+        var operators = data.LoadOperatorsAsync().GetAwaiter().GetResult();
+        var (equipment, _) = data.LoadEquipmentAsync().GetAwaiter().GetResult();
+        var (covenants, map) = data.LoadCovenantsAsync().GetAwaiter().GetResult();
+        var calculator = new CovenantCalculator(operators, covenants, map);
+        var folder = Path.Combine(Path.GetTempPath(), "planner-contrast-" + Guid.NewGuid().ToString("N"));
+        var panel = new SidePanelWindow(new OperatorBrowseViewModel(), new EquipmentBrowseViewModel(),
+            new TrackingViewModel(), new GameStateViewModel(), new BanViewModel(), new EnemyViewModel(),
+            new LineupViewModel(new LineupStore(Path.Combine(folder, "lineups"), calculator.EquipmentRules), calculator),
+            new LineupShareService(calculator.EquipmentRules, Path.Combine(folder, "share")), operators, equipment, [],
+            new SettingsManager(folder), theme, new SidePanelPositionSettings { FreeMovement = true }, covenants: covenants)
+        { Opacity = 0, ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000, Height = 1000 };
+        panel.Show();
+        ThemeManager.Apply(theme, night);
+        ((TabControl)panel.FindName("MainTabs")).SelectedItem = panel.FindName("LineupsTab");
+        ((ListBox)panel.FindName("LineupsSegment")).SelectedIndex = 1;
+        panel.PlannerVm.IsActive = false;
+        panel.PlannerVm.AllCovenants.Single(c => c.Name == "乌萨斯").Level = 2;
+        panel.PlannerVm.AllCovenants.Single(c => c.Name == "奥术").Level = 2;
+        panel.PlannerVm.StatusText = "计算完成";
+        panel.PlannerVm.StatusDetail = "0.0 秒 · 改动后自动重算";
+        var view = (LineupPlannerView)panel.FindName("PlannerView");
+        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "planner-chrome-contrast");
+        Directory.CreateDirectory(output);
+        using var assertions = new FluentAssertions.Execution.AssertionScope();
+        foreach (var width in new[] { 280, 360, 400 })
+        foreach (var results in new[] { false, true })
+        {
+            panel.Width = width;
+            panel.PlannerVm.ShowResults = results;
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            Save((FrameworkElement)panel.Content, Path.Combine(output, $"{theme}-{night}-{width}-{results}.png"));
+            var texts = new[] { "GoalTabButton", "ResultTabButton" }
+                .SelectMany(name => Descendants<TextBlock>((Button)view.FindName(name)))
+                .Concat(Descendants<TextBlock>(view).Where(t => t.Text is "计算完成" or "0.0 秒 · 改动后自动重算")).ToList();
+            texts.Should().HaveCount(4);
+            foreach (var text in texts)
+            {
+                var foreground = ((SolidColorBrush)text.Foreground).Color;
+                var background = Background(text);
+                var a = Luminance(foreground);
+                var b = Luminance(background);
+                ((Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05)).Should().BeGreaterThanOrEqualTo(4.5,
+                    $"{theme}, night={night}, width={width}, results={results}, text={text.Text}");
+            }
+        }
+        panel.Close();
+
+        static Color Background(DependencyObject element)
+        {
+            for (var parent = VisualTreeHelper.GetParent(element); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+                if (parent is Border { Background: SolidColorBrush brush } && brush.Color.A == 255) return brush.Color;
+            throw new InvalidOperationException("Planner text has no opaque background.");
+        }
+        static double Luminance(Color color)
+        {
+            static double Linear(byte value) => value / 255.0 <= 0.04045
+                ? value / 255.0 / 12.92 : Math.Pow((value / 255.0 + 0.055) / 1.055, 2.4);
+            return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+        }
+    }, $"{nameof(PlannerChrome_HasReadableContrast)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
     public Task TransientHints_HaveReadableContrast(GameShopTheme theme, bool night) => ui.RunAsync(() =>
     {
         var folder = Path.Combine(Path.GetTempPath(), "hint-contrast-" + Guid.NewGuid().ToString("N"));
