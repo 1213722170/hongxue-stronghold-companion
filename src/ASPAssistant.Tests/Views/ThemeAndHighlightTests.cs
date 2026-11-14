@@ -174,6 +174,9 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     public Task Tracking_EquipmentAndGroups() => ui.RunAsync(TrackingWorkflowViewTests.VerifyEquipmentAndGroups, nameof(Tracking_EquipmentAndGroups));
 
     [Fact]
+    public Task Codex_PreservesFiltersAndNavigation() => ui.RunAsync(ClearAndLineupSourceViewTests.VerifyCodex, nameof(Codex_PreservesFiltersAndNavigation));
+
+    [Fact]
     public Task ClearInputs_PreserveLineupSources() => ui.RunAsync(ClearAndLineupSourceViewTests.Verify, nameof(ClearInputs_PreserveLineupSources));
 
     [Fact]
