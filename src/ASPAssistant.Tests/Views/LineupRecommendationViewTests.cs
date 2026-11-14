@@ -1,9 +1,11 @@
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ASPAssistant.App;
+using ASPAssistant.App.Controls;
 using ASPAssistant.App.Views;
 using ASPAssistant.App.Windows;
 using ASPAssistant.Core.Data;
@@ -23,6 +25,9 @@ internal static class LineupRecommendationViewTests
             .SelectMany(pair => pair.Item2.Select(name => new Operator { Name = name.ToString(), Tier = 1, CoreCovenants = [pair.Item1] }))];
         CovenantInfo[] covenants = [.. new[] { "炎", "谢拉格", "乌萨斯", "维多利亚" }.Select(n => new CovenantInfo { Name = n, BondType = "SEASON", ActivateCount = 3 })];
         var calculator = new CovenantCalculator(operators, covenants, new Dictionary<string, string>());
+        using var operatorData = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "TestData", "Regulation", "operators.json")));
+        var manyBans = operatorData.RootElement.GetProperty("operators").EnumerateArray().Take(40)
+            .Select(o => o.GetProperty("name").GetString()!).ToArray();
         foreach (var theme in Enum.GetValues<GameShopTheme>())
         foreach (var night in new[] { false, true })
         {
@@ -57,20 +62,47 @@ internal static class LineupRecommendationViewTests
             ((FrameworkElement)view.FindName("RecommendSection")).Visibility.Should().Be(Visibility.Visible);
             var recommendations = ((ItemsControl)view.FindName("RecommendItems")).Items.Cast<LineupCardItem>().ToList();
             recommendations.Select(r => r.Recommendation!.Kind).Should().Equal(RecommendationKind.Usable, RecommendationKind.NeedsRepair, RecommendationKind.Broken);
-            foreach (var width in new[] { 280, 360 })
+            foreach (var many in new[] { false, true })
             {
-                panel.Width = width;
-                Pump();
-                var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "lineup-recommendation");
-                Directory.CreateDirectory(output);
-                var content = (FrameworkElement)panel.Content;
-                var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-                bitmap.Render(content);
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                using var file = File.Create(Path.Combine(output, $"{theme}-{night}-{width}.png"));
-                encoder.Save(file);
+                bans.SetBans(many ? manyBans : ["乙"]);
+                bans.SetCovenantBans(many ? covenants.Select(c => c.Name) : ["乌萨斯"]);
+                foreach (var width in new[] { 280, 360, 400 })
+                {
+                    panel.Width = width;
+                    Pump();
+                    var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "lineup-recommendation");
+                    Directory.CreateDirectory(output);
+                    var content = (FrameworkElement)panel.Content;
+                    var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(content);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    using var file = File.Create(Path.Combine(output, $"{theme}-{night}-{width}-{(many ? "many" : "single")}.png"));
+                    encoder.Save(file);
+                    var strip = (FrameworkElement)view.FindName("BannedStrip");
+                    var avatars = (ItemsControl)view.FindName("BannedAvatars");
+                    var rendered = Descendants<Avatar>(avatars).ToList();
+                    rendered.Should().HaveCount(many ? 40 : 1);
+                    foreach (var avatar in rendered)
+                    {
+                        var bounds = avatar.TransformToAncestor(strip).TransformBounds(new Rect(0, 0, avatar.ActualWidth, avatar.ActualHeight));
+                        bounds.Left.Should().BeGreaterThanOrEqualTo(0);
+                        bounds.Right.Should().BeLessThanOrEqualTo(strip.ActualWidth + 0.5, "banned portraits must fit inside the summary instead of clipping at its right edge");
+                    }
+                    if (many)
+                    {
+                        rendered[1].TranslatePoint(new Point(), avatars).Y.Should().BeApproximately(rendered[0].TranslatePoint(new Point(), avatars).Y, 0.5,
+                            "a narrow sidebar still has room for multiple portraits per row");
+                        strip.ActualHeight.Should().BeLessThan(360, "forty banned operators should wrap across the available width");
+                    }
+                }
             }
+            bans.ClearBans();
+            Pump();
+            ((FrameworkElement)view.FindName("RecommendSection")).Visibility.Should().Be(Visibility.Collapsed);
+            bans.SetBans(["乙"]);
+            bans.SetCovenantBans(["乌萨斯"]);
+            Pump();
             var search = (TextBox)view.FindName("SearchBox");
             search.Text = "安全";
             Pump();

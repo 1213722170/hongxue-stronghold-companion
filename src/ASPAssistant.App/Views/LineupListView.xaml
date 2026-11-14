@@ -405,8 +405,8 @@
                                            Foreground="{DynamicResource TextSecondaryBrush}" />
                             </DockPanel>
                             <Border x:Name="BannedStrip" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
-                                <DockPanel>
-                                    <TextBlock Text="本局禁用" FontSize="10" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <StackPanel>
+                                    <TextBlock Text="本局禁用" FontSize="10" Margin="0,0,0,4" Foreground="{DynamicResource TextSecondaryBrush}" />
                                     <ItemsControl x:Name="BannedCovenantsList" Focusable="False" VerticalAlignment="Center">
                                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -426,7 +426,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                </DockPanel>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </Border>
