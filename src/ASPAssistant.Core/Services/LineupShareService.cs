@@ -1,3 +1,4 @@
+// Modified for ASP Assistant Arknights on 2026-11-13; see NOTICE.
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -51,7 +52,8 @@ public class LineupShareService
         var json = JsonSerializer.Serialize(lineup, JsonOptions);
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            lineup.Name, lineup.Slots, lineup.EarlySlots, lineup.MidSlots, lineup.SupportSlots, lineup.Strategies, lineup.SourceUrl
+            lineup.Name, lineup.Slots, lineup.EarlySlots, lineup.MidSlots, lineup.SupportSlots, lineup.Strategies, lineup.SourceUrl,
+            TargetCovenants = lineup.TargetCovenants.Count > 0 ? lineup.TargetCovenants : null
         }, JsonOptions)));
 
         await _exportGate.WaitAsync(ct);

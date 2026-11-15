@@ -43,6 +43,7 @@ public sealed class BanScreenAnalyzer
     /// <summary>Awaits progress preparation for a validated opening or a changed complete Ban set.</summary>
     public Func<bool, Task>? PrepareNewRunAsync { get; set; }
     public Func<Task<byte[]?>>? ScrollInformationPanelAsync { get; set; }
+    public Func<long> CaptureRevisionProvider { get; set; } = () => 0;
     public event Action<string>? ScrollRequired;
     private bool _scrollReminderShown;
 
@@ -75,6 +76,7 @@ public sealed class BanScreenAnalyzer
     private BanScreenResult? _lastResult;
     private IReadOnlyList<string>? _lastAutoBans;
     private EnemyResult? _lastEnemy;
+    private long _lastCaptureRevision;
 
     public BanScreenAnalyzer(
         Func<Task<byte[]?>> captureInformationScreen,
@@ -117,6 +119,7 @@ public sealed class BanScreenAnalyzer
             AppLogger.Info("BanAnalyzer", "Starting ban-screen analysis");
             AppConsole.WriteLine("[BanAnalyzer] 截图...");
             var shot = await _captureInformationScreen();
+            var captureRevision = CaptureRevisionProvider();
             if (shot == null)
             {
                 AppLogger.Warn("BanAnalyzer", "Screenshot failed");
@@ -126,11 +129,15 @@ public sealed class BanScreenAnalyzer
 
             var (rawWidth, rawHeight) = GetPngDimensions(shot);
             var shotHash = HashShot(shot);
-            if (_lastResult is not null && shotHash == _lastShotHash)
+            if (_lastResult is not null && shotHash == _lastShotHash && captureRevision == _lastCaptureRevision)
             {
                 AppLogger.Info("BanAnalyzer", "Identical screenshot, reusing the previous analysis");
                 if (PrepareNewRunAsync is { } cachedPrepare && await _informationDetector.IsOpeningScreenAsync(shot, rawWidth, rawHeight))
+                {
+                    if (captureRevision != CaptureRevisionProvider()) return;
                     await cachedPrepare(false);
+                }
+                if (captureRevision != CaptureRevisionProvider()) return;
                 AutoBanListComputed?.Invoke(_lastAutoBans ?? []);
                 if (_lastEnemy is not null) EnemyDetected?.Invoke(_lastEnemy);
                 AnalysisCompleted?.Invoke(_lastResult);
@@ -153,6 +160,7 @@ public sealed class BanScreenAnalyzer
             {
                 read = await BanCovenantReader.ReadAsync(_ocr, _ocrStrategy, shot, imgWidth, imgHeight,
                     _coreCovenantNames, _additionalCovenantNames);
+                if (captureRevision != CaptureRevisionProvider()) return;
                 if (completeCore is null && read.SawCoreHeader && !read.HasIncompleteCoreRows
                     && read.UnnamedCore.Count == 0 && read.Core.Count >= 6
                     && (read.CoreSlots == 0 || read.Core.Count == read.CoreSlots)
@@ -187,6 +195,7 @@ public sealed class BanScreenAnalyzer
                     return;
                 }
                 var next = await scroll();
+                if (captureRevision != CaptureRevisionProvider()) return;
                 if (next is null)
                 {
                     AppLogger.Warn("BanAnalyzer", "Information panel scroll or subsequent screenshot failed");
@@ -231,6 +240,7 @@ public sealed class BanScreenAnalyzer
                 return;
             }
             var enemy = await _enemyRecognizer.RecognizeAsync(shot, imgWidth, imgHeight);
+            if (captureRevision != CaptureRevisionProvider()) return;
             var hasEnemy = enemy is not null && enemy.BossName.Length > 0 && enemy.EnemyTypes.Count > 0;
             var enemyFaction = hasEnemy ? enemy!.BossName : null;
 
@@ -243,9 +253,12 @@ public sealed class BanScreenAnalyzer
                             .SetEquals(_lastResult.CoreCovenants.Where(c => c.IsBanned).Select(c => c.Name))
                         || !result.AdditionalCovenants.Where(c => c.IsBanned).Select(c => c.Name).ToHashSet(StringComparer.Ordinal)
                             .SetEquals(_lastResult.AdditionalCovenants.Where(c => c.IsBanned).Select(c => c.Name)));
-                if (bansChanged || await _informationDetector.IsOpeningScreenAsync(shot, imgWidth, imgHeight))
+                var isOpening = bansChanged || await _informationDetector.IsOpeningScreenAsync(shot, imgWidth, imgHeight);
+                if (captureRevision != CaptureRevisionProvider()) return;
+                if (isOpening)
                     await prepare(bansChanged);
             }
+            if (captureRevision != CaptureRevisionProvider()) return;
             var autoBans = ComputeAutoBans(result);
             LogRecognitionSummary(result, autoBans);
             AutoBanListComputed?.Invoke(autoBans);
@@ -254,6 +267,7 @@ public sealed class BanScreenAnalyzer
             LogResults(result, sw.ElapsedMilliseconds);
 
             _lastShotHash = shotHash;
+            _lastCaptureRevision = captureRevision;
             _lastResult = result;
             _lastAutoBans = autoBans;
             _lastEnemy = hasEnemy ? enemy : null;
@@ -261,7 +275,7 @@ public sealed class BanScreenAnalyzer
             AnalysisCompleted?.Invoke(result);
             await ShowTimedGameOverlayMessageAsync(hasEnemy
                 ? "识别成功！鸿雪·卫戍助手祝您卫戍愉快！"
-                : "盟约已录入，敌人信息可在敌人页重试", 2000);
+                : "盟约已录入，敌人信息可重新截屏录入", 2000);
         }
         catch (Exception ex)
         {
@@ -311,7 +325,7 @@ public sealed class BanScreenAnalyzer
             if (string.IsNullOrWhiteSpace(op.Name))
                 continue;
 
-            // Same rule as the planner: unavailable only when every covenant of the operator is banned.
+            // Share the planner's core-first covenant ban rule.
             if (CovenantBanRules.IsExcluded(op.CoreCovenants, op.AdditionalCovenants, bannedCovenants))
                 autoBannedOperators.Add(op.Name);
         }

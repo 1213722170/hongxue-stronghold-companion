@@ -1,4 +1,4 @@
-// Modified for ASP Assistant Regulation on 2026-11-11; see NOTICE.
+// Modified for ASP Assistant Regulation on 2026-11-13; see NOTICE.
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -30,7 +30,6 @@ public partial class SidePanelWindow : Window
 
     public event Action? ManualScanRequested;
     public event Action? GameConnectionRequested;
-    public event Action? EnemyRecognitionRequested;
     public event Action<string, bool>? BanToggleRequested;
 
     private readonly LineupShareService _lineupShareService;
@@ -66,6 +65,7 @@ public partial class SidePanelWindow : Window
     private WindowState _previousWindowState;
     private WindowState? _stateBeforeGameMinimized;
     private bool _isUserMovingOrSizing;
+    private RECT? _moveStartRect;
 
     // Global hotkey (Ctrl+Shift+/) for manual screenshot scan
     private const int HotkeyIdManualScan = 0x4153; // 'AS' — arbitrary unique app-scoped ID
@@ -177,17 +177,19 @@ public partial class SidePanelWindow : Window
         TrackingView.SetCovenantCalculator(lineupVm.Calculator);
         TrackingView.DataContext = trackingVm;
         EnemyView.DataContext = enemyVm;
-        EnemyView.RecognitionRequested += () => EnemyRecognitionRequested?.Invoke();
+        RunBanView.DataContext = operatorVm;
         LineupView.DataContext = lineupVm;
         LineupView.SetTracking(trackingVm);
-        lineupVm.SetBanChecker(name => banVm.IsBanned(name)
-            || allOperators.Any(op => op.Name == name && CovenantBanRules.IsExcluded(op, banVm.BannedCovenants)));
+        bool CovenantBlocked(string name) => allOperators.Any(op => op.Name == name && CovenantBanRules.IsExcluded(op, banVm.BannedCovenants));
+        bool Unavailable(string name) => banVm.IsBanned(name) || CovenantBlocked(name);
+        operatorVm.SetBanChecker(Unavailable);
         WireLineupView();
 
         OperatorView.IsTrackedCheck = trackingVm.IsTracked;
         EquipmentView.IsTrackedCheck = trackingVm.IsTracked;
 
         OperatorView.IsBannedCheck = banVm.IsBanned;
+        OperatorView.IsCovenantBannedCheck = CovenantBlocked;
         OperatorView.ManageCustomOperatorsRequested += async () =>
         {
             var dialog = new CustomOperatorSelectionWindow(allOperators.Where(op => op.IsCustom)) { Owner = this };
@@ -201,7 +203,7 @@ public partial class SidePanelWindow : Window
             }
             var names = dialog.Result.ToHashSet(StringComparer.Ordinal);
             foreach (var op in allOperators.Where(op => op.IsCustom)) op.IsSelectedCustom = names.Contains(op.Name);
-            operatorVm.LoadOperators(allOperators.Where(op => op.RequiredStrategyId.Length == 0).ToList());
+            operatorVm.LoadOperators(allOperators.ToList());
             PlannerVm.NotifyOperatorSelectionChanged();
             ShowToast($"已保存 {names.Count} 名自选干员");
         };
@@ -218,14 +220,14 @@ public partial class SidePanelWindow : Window
                 trackingVm.ClearAllTracking();
         };
 
-        OperatorView.ClearBansRequested += () => banVm.ClearBans();
-        OperatorView.ClearRunRequested += () =>
+        RunBanView.ClearBansRequested += () => banVm.ClearBans();
+        RunBanView.ClearRunRequested += () =>
         {
             banVm.ClearRunBans();
             operatorVm.ClearCovenantHighlights();
             PlannerVm.OnlyCurrentRun = false;
         };
-        OperatorView.ManualScanRequested += () => ManualScanRequested?.Invoke();
+        RunBanView.ManualScanRequested += () => ManualScanRequested?.Invoke();
         OperatorView.BanToggleRequested += (name, banned) => BanToggleRequested?.Invoke(name, banned);
 
         banVm.BansChanged += () =>
@@ -234,11 +236,11 @@ public partial class SidePanelWindow : Window
             {
                 OperatorView.RefreshBannedStates();
                 operatorVm.NotifyBansChanged();
-                lineupVm.RefreshAvailability();
-                OperatorView.SetBanSummary([.. banVm.BannedCovenants], banVm.BannedNames.Count);
+                UpdateBanSummary();
+                UpdateLineupRunInfo();
             });
         };
-        OperatorView.SetBanSummary([.. banVm.BannedCovenants], banVm.BannedNames.Count);
+        UpdateBanSummary();
 
         trackingVm.TrackedOperators.CollectionChanged += (_, _) =>
         {
@@ -259,16 +261,26 @@ public partial class SidePanelWindow : Window
         _hwndSource = HwndSource.FromHwnd(hwnd);
         _hwndSource.AddHook(WndProc);
         SystemBorder.Hide(hwnd);
-        User32.RegisterHotKey(hwnd, HotkeyIdManualScan,
-            User32.MOD_CONTROL | User32.MOD_SHIFT, User32.VK_OEM_2);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == User32.WM_ENTERSIZEMOVE) _isUserMovingOrSizing = true;
+        if (msg == User32.WM_ENTERSIZEMOVE)
+        {
+            _isUserMovingOrSizing = true;
+            _moveStartRect = User32.ReadWindowRect(hwnd);
+        }
         if (msg == User32.WM_EXITSIZEMOVE)
         {
             _isUserMovingOrSizing = false;
+            var bounds = User32.ReadWindowRect(hwnd);
+            if (_moveStartRect is { } start && bounds.Width == start.Width && bounds.Height == start.Height
+                && (bounds.Left != start.Left || bounds.Top != start.Top))
+            {
+                var work = User32.GetMonitorGeometry(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2).WorkArea;
+                User32.SetWindowBounds(hwnd, WindowGeometry.SnapBounds(bounds, work, User32.GetWindowDpiScale(hwnd), _lastGameRect));
+            }
+            _moveStartRect = null;
             var placement = CaptureSidePanelPlacement();
             _userHeightDip = placement.HeightDip;
             _positionSettings = _positionSettings with
@@ -280,21 +292,38 @@ public partial class SidePanelWindow : Window
             };
             _ = SavePreferenceAsync(() => _settingsManager.SaveSidePanelPositionAsync(_positionSettings), FreeSidePanelMovementToggle);
         }
-        if (msg == User32.WM_HOTKEY && wParam.ToInt32() == _assistantHotkeyId)
+        if (msg == User32.WM_HOTKEY)
         {
-            ToggleAssistantVisibilityRequested?.Invoke();
-            handled = true;
-        }
-        if (msg == User32.WM_HOTKEY && wParam.ToInt32() == HotkeyIdManualScan)
-        {
-            ManualScanRequested?.Invoke();
+            var id = wParam.ToInt32();
+            var hotkey = id == _assistantHotkeyId ? _assistantHotkey : id == _recognitionHotkeyId ? _recognitionHotkey : null;
+            if (hotkey is null) return IntPtr.Zero;
+            if (AssistantHotkeyBox.IsKeyboardFocusWithin) _ = SaveAssistantHotkeyAsync(hotkey);
+            else if (RecognitionHotkeyBox.IsKeyboardFocusWithin) _ = SaveRecognitionHotkeyAsync(hotkey);
+            else if (id == _assistantHotkeyId) ToggleAssistantVisibilityRequested?.Invoke();
+            else ManualScanRequested?.Invoke();
             handled = true;
         }
         return IntPtr.Zero;
     }
 
+    /// <summary>对局信息 header: banned covenants, banned operators' portraits and the unusable count.</summary>
+    private void UpdateBanSummary()
+    {
+        var byName = _allOperators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First());
+        var banned = BanVm.BannedNames.Concat(_allOperators.Where(op => CovenantBanRules.IsExcluded(op, BanVm.BannedCovenants)).Select(op => op.Name))
+            .Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.Ordinal)
+            .Select(n => byName.TryGetValue(n, out var op) ? op : new Operator { Name = n }).ToList();
+        RunBanView.SetBanSummary([.. BanVm.BannedCovenants], banned.Count, banned);
+    }
+
     public void UpdateManualScanStatus(int pending)
-        => OperatorView.UpdateManualScanStatus(pending);
+        => RunBanView.UpdateManualScanStatus(pending);
+
+    public void EnableCurrentRunFilters()
+    {
+        OperatorBrowseVm.OnlyCurrentRun = true;
+        PlannerVm.OnlyCurrentRun = true;
+    }
 
     /// <summary>Settings card: source in the title, live status below, icon tinted by state (PC grey, ADB green / red).</summary>
     public void UpdateGameConnectionStatus(bool isAdb, string status)
@@ -545,6 +574,20 @@ public partial class SidePanelWindow : Window
 
     public void ClearGamePosition() => _lastGameRect = null;
 
+    public void UpdateTopmost(IntPtr game, IntPtr foreground)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var ownedFocus = foreground;
+        while (ownedFocus != IntPtr.Zero && ownedFocus != hwnd)
+            ownedFocus = User32.GetWindow(ownedFocus, 4); // GW_OWNER includes editor and selection dialogs.
+        var topmost = game != IntPtr.Zero && User32.IsWindow(game) && !User32.IsIconic(game)
+            && !IsAssistantHidden && WindowState == WindowState.Normal
+            && (foreground == game || Topmost && ownedFocus == hwnd);
+        if (Topmost == topmost && ((User32.GetWindowLong(hwnd, User32.GWL_EXSTYLE) & 8) != 0) == topmost) return;
+        Topmost = topmost;
+        User32.SetWindowLayer(hwnd, topmost);
+    }
+
     public void UpdatePosition(RECT gameRect, bool isFullscreen)
     {
         _lastGameRect = gameRect;
@@ -660,7 +703,7 @@ public partial class SidePanelWindow : Window
 
     private void OnTitleBarDrag(object sender, MouseButtonEventArgs e)
     {
-        if (_positionSettings.FreeMovement && e.LeftButton == MouseButtonState.Pressed)
+        if (e.LeftButton == MouseButtonState.Pressed)
             DragMove();
     }
 
@@ -860,6 +903,22 @@ public partial class SidePanelWindow : Window
         await SavePreferenceAsync(() => _settingsManager.SaveShowBoardOverlayAsync(enabled), BoardOverlayToggle);
     }
 
+    public event Action<bool>? AutomaticPurchaseTrackingChanged;
+
+    public void InitAutomaticPurchaseTracking(bool enabled)
+    {
+        AutomaticPurchaseTrackingToggle.IsChecked = enabled;
+        AutomaticPurchaseTrackingToggle.Checked += OnAutomaticPurchaseTrackingChanged;
+        AutomaticPurchaseTrackingToggle.Unchecked += OnAutomaticPurchaseTrackingChanged;
+    }
+
+    private async void OnAutomaticPurchaseTrackingChanged(object sender, RoutedEventArgs e)
+    {
+        var enabled = AutomaticPurchaseTrackingToggle.IsChecked == true;
+        AutomaticPurchaseTrackingChanged?.Invoke(enabled);
+        await SavePreferenceAsync(() => _settingsManager.SaveAutomaticPurchaseTrackingAsync(enabled), AutomaticPurchaseTrackingToggle);
+    }
+
     private async void OnMultipleLineupsChanged(object sender, RoutedEventArgs e)
     {
         TrackingVm.TrackMultipleLineups = MultiLineupTrackingToggle.IsChecked == true;
@@ -889,7 +948,6 @@ public partial class SidePanelWindow : Window
         if (!ConfirmDialog.Ask(this, "退出确认", "确定要关闭鸿雪·卫戍助手吗？\n关闭后识别、悬浮提示与快捷键都会停止。", "关闭"))
             return;
 
-        User32.UnregisterHotKey(new WindowInteropHelper(this).Handle, HotkeyIdManualScan);
         Application.Current.Shutdown();
     }
 
@@ -1002,7 +1060,61 @@ public partial class SidePanelWindow : Window
                 ShowToast($"追踪失败：{ex.Message}");
             }
         };
+        LineupView.RepairLineupRequested += rec =>
+        {
+            ShowLineupsSegment(planner: true);
+            PlannerVm.BeginRepair(rec.Lineup, LineupVm.TargetsOf(rec.Lineup), rec.Banned);
+        };
         WirePlannerView();
+        UpdateLineupRunInfo();
+    }
+
+    /// <summary>本局推荐 follows the opening bans: none recorded → no recommendations.</summary>
+    private void UpdateLineupRunInfo()
+    {
+        var bannedCovenants = BanVm.BannedCovenants;
+        if (BanVm.BannedNames.Count == 0 && bannedCovenants.Count == 0 && !OperatorBrowseVm.HasRunInfo)
+        {
+            LineupVm.SetRunInfo(null, null);
+            return;
+        }
+        var byName = _allOperators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First());
+        bool Unavailable(string name) => BanVm.IsBanned(name)
+            || (byName.TryGetValue(name, out var op) && CovenantBanRules.IsExcluded(op, bannedCovenants));
+        LineupVm.SetRunInfo(Unavailable, new HashSet<string>(bannedCovenants),
+            [.. BanVm.BannedNames.Concat(byName.Keys.Where(Unavailable)).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.Ordinal)]);
+    }
+
+    /// <summary>Opens the 阵容 tab on 我的阵容 (with 本局推荐 in view) or on 规划.</summary>
+    public void ShowLineupsSegment(bool planner)
+    {
+        MainTabs.SelectedItem = LineupsTab;
+        LineupsSegment.SelectedIndex = planner ? 1 : 0;
+        if (!planner)
+        {
+            UpdateLineupRunInfo();
+            LineupView.ShowRecommendations();
+        }
+    }
+
+    private void OnLineupsSegmentChanged(object sender, SelectionChangedEventArgs e)
+    {
+        e.Handled = true;
+        if (LineupView is null || PlannerView is null) return;
+        bool planner = LineupsSegment.SelectedIndex == 1;
+        LineupView.Visibility = planner ? Visibility.Collapsed : Visibility.Visible;
+        PlannerView.Visibility = planner ? Visibility.Visible : Visibility.Collapsed;
+        if (IsLoaded) PageTransition.SlideIn(planner ? PlannerView : LineupView, fromY: 8);
+    }
+
+    private void OnCodexSegmentChanged(object sender, SelectionChangedEventArgs e)
+    {
+        e.Handled = true;
+        if (OperatorView is null || EquipmentView is null) return;
+        bool equipment = CodexSegment.SelectedIndex == 1;
+        OperatorView.Visibility = equipment ? Visibility.Collapsed : Visibility.Visible;
+        EquipmentView.Visibility = equipment ? Visibility.Visible : Visibility.Collapsed;
+        if (IsLoaded) PageTransition.SlideIn(equipment ? EquipmentView : OperatorView, fromY: 8);
     }
 
     private void WirePlannerView()
@@ -1035,6 +1147,7 @@ public partial class SidePanelWindow : Window
                 ShowToast($"保存失败：{ex.Message}");
             }
         };
+        PlannerVm.OverwriteRequested += async lineup => await SaveEditedLineupAsync(lineup, edited: true);
         PlannerVm.TrackRequested += lineup =>
         {
             try
@@ -1063,7 +1176,11 @@ public partial class SidePanelWindow : Window
         OperatorBrowseVm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(OperatorBrowseViewModel.HighlightedCovenants))
-                Dispatcher.Invoke(() => PlannerVm.SetAvailableCovenants(OperatorBrowseVm.HighlightedCovenants));
+                Dispatcher.Invoke(() =>
+                {
+                    PlannerVm.SetAvailableCovenants(OperatorBrowseVm.HighlightedCovenants);
+                    UpdateLineupRunInfo();
+                });
         };
         PlannerView.DataContext = PlannerVm;
     }
