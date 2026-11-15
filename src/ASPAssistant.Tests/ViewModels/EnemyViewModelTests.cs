@@ -7,16 +7,13 @@ namespace ASPAssistant.Tests.ViewModels;
 public class EnemyViewModelTests
 {
     [Fact]
-    public void BusyStatesDisableRetryUntilBothScansFinish()
+    public void RecognitionFailureEndsBusyState()
     {
         var vm = new EnemyViewModel();
         vm.BeginRecognition();
-        vm.CanRecognize.Should().BeFalse();
-        vm.IsBanAnalysisRunning = true;
+        vm.IsRecognizing.Should().BeTrue();
         vm.RecognitionFailed("未获取到游戏画面");
-        vm.CanRecognize.Should().BeFalse();
-        vm.IsBanAnalysisRunning = false;
-        vm.CanRecognize.Should().BeTrue();
+        vm.IsRecognizing.Should().BeFalse();
         vm.RecognitionStatus.Should().Be("未获取到游戏画面");
     }
 
@@ -49,7 +46,6 @@ public class EnemyViewModelTests
         vm.BossDescription.Should().Be("旧资料");
         vm.EnemyTypeDetails.Should().ContainSingle();
         vm.UnmatchedEntries.Should().BeEmpty();
-        vm.CanRecognize.Should().BeTrue();
     }
 
     [Fact]
@@ -63,7 +59,6 @@ public class EnemyViewModelTests
         vm.RawTexts.Should().Contain("未知首领");
         vm.UnmatchedEntries.Should().HaveCount(2);
         vm.IsRecognizing.Should().BeFalse();
-        vm.CanRecognize.Should().BeTrue();
     }
 
     [Fact]

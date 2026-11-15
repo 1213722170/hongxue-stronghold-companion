@@ -34,11 +34,13 @@ public static class SearchMatch
     {
         query = query.Trim();
         if (query.Length == 0) return true;
+        var compactQuery = query.Replace("·", "");
         var latin = query.All(c => c < 128 && char.IsLetterOrDigit(c));
         foreach (var text in texts)
         {
             if (string.IsNullOrEmpty(text)) continue;
             if (text.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
+            if (text.Contains('·') && text.Replace("·", "").Contains(compactQuery, StringComparison.OrdinalIgnoreCase)) return true;
             if (latin && InitialsOf(text).StartsWith(query, StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;

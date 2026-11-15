@@ -1078,18 +1078,41 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Style="{StaticResource PlannerGhostButton}" Margin="0,0,5,5" Padding="3,0,9,0"
+                                <Button Margin="0,0,5,5" Padding="3,0,9,0"
                                         Tag="{Binding}" ToolTip="{StaticResource OperatorDetailsToolTip}" ToolTipService.InitialShowDelay="300"
+                                        ToolTipService.ShowOnDisabled="True"
                                         Command="{Binding DataContext.LockOperatorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Name}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource PlannerGhostButton}">
+                                            <Setter Property="IsEnabled" Value="False" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RequiredStrategyId.Length}" Value="0">
+                                                    <Setter Property="IsEnabled" Value="True" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <controls:Avatar Width="18" Height="18" Margin="0,0,5,0" Small="True" Text="{Binding Name}" Source="{Binding IconPath}" />
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                        <TextBlock Text="策略已包含" Margin="5,0,0,0" FontSize="10" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RequiredStrategyId.Length}" Value="0">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding LockedOperators}" Margin="0,4,0,0" Focusable="False">
+                    <ItemsControl x:Name="LockedOperatorsList" ItemsSource="{Binding LockedOperators}" Margin="0,4,0,0" Focusable="False">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -1100,9 +1123,22 @@
                                 <Border Height="26" CornerRadius="{DynamicResource RowCornerRadius}" Margin="0,0,5,5" Padding="3,0,2,0" BorderThickness="1"
                                         Tag="{Binding Operator}" ToolTip="{StaticResource OperatorDetailsToolTip}" ToolTipService.InitialShowDelay="300"
                                         Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBorderBrush}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUnavailable}" Value="True">
+                                                    <Setter Property="Opacity" Value="0.55" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <controls:Avatar Width="20" Height="20" Margin="0,0,5,0" Small="True" Text="{Binding Name}" Source="{Binding IconPath}" />
                                         <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="已 Ban" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource WarningTextBrush}"
+                                                   Visibility="{Binding IsUnavailable, Converter={StaticResource BoolToVis}}"
+                                                   ToolTip="本局暂不计入必带，解除 Ban 后自动恢复" />
                                         <Button Content="✕" Style="{StaticResource PlannerLinkButton}" Foreground="{DynamicResource TextSecondaryBrush}"
                                                 Margin="5,0,4,0" Command="{Binding RemoveCommand}" ToolTip="取消锁定" />
                                     </StackPanel>
@@ -1186,8 +1222,9 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Path Width="9" Height="10" Margin="0,0,4,0" Stretch="Uniform" StrokeThickness="1.6" StrokeLineJoin="Round"
                                       Data="M6,11 L18,11 L18,20 L6,20 Z M8.5,11 L8.5,8 A3.5,3.5 0 0 1 15.5,8 L15.5,11" Stroke="{DynamicResource TextSecondaryBrush}" />
-                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}">
-                                    <Run Text="必带" /> <Run Text="{Binding LockedOperators.Count, Mode=OneWay}" />
+                                <TextBlock x:Name="ActiveLockedCountText" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           ToolTip="本局可用的必带人数，被 Ban 的干员暂不计入">
+                                    <Run Text="必带" /> <Run Text="{Binding ActiveLockedCount, Mode=OneWay}" />
                                 </TextBlock>
                             </StackPanel>
                         </Border>

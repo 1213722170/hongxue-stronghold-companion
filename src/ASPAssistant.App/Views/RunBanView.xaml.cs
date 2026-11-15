@@ -5,7 +5,7 @@ using ASPAssistant.Core.Models;
 
 namespace ASPAssistant.App.Views;
 
-/// <summary>This run's bans: banned covenants and operators, 截屏录入, and ⋯ (只看本局盟约 / 清除录入 / 清除 Ban 位).</summary>
+/// <summary>This run's bans: banned covenants and operators, 截屏录入, 清除录入 and 清除 Ban 位.</summary>
 public partial class RunBanView : UserControl
 {
     public event Action? ClearBansRequested;
@@ -38,10 +38,8 @@ public partial class RunBanView : UserControl
         ManualScanStatusText.Visibility = pending > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void OnRunMenuClicked(object sender, RoutedEventArgs e)
-    {
-        if (RunMenuButton.ContextMenu is not { } menu) return;
-        menu.PlacementTarget = RunMenuButton;
-        menu.IsOpen = true;
-    }
+    public void SetRecognitionHotkeyText(string? hotkey)
+        => ManualScanButton.ToolTip = "打开游戏内的本局信息页后点击，录入 Ban 位、盟约和敌人"
+            + (hotkey is null ? "（未设置快捷键）" : $"（{hotkey}）");
+
 }

@@ -81,6 +81,7 @@ public partial class LineupListView : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(LineupViewModel.SelectedAvailabilityFilter)) _showAllRecommendations = false;
         if (e.PropertyName is nameof(LineupViewModel.FilterTier) or nameof(LineupViewModel.FilterMatchAll)) SyncSegments();
         if (e.PropertyName is nameof(LineupViewModel.HasActiveFilters)) UpdateTagsRow();
     }
@@ -98,6 +99,12 @@ public partial class LineupListView : UserControl
     /// <summary>Scrolls back to the top so 本局推荐 is in view (after the opening info is recorded).</summary>
     public void ShowRecommendations()
     {
+        if (_vm is not null)
+            _vm.SelectedAvailabilityFilter = !_vm.HasRunInfo ? LineupAvailabilityFilter.All
+                : _vm.Recommendations.Any(r => r.Kind is RecommendationKind.BannedButFine or RecommendationKind.NeedsRepair)
+                    ? LineupAvailabilityFilter.Pending
+                    : _vm.Recommendations.Any(r => r.Kind == RecommendationKind.Usable)
+                        ? LineupAvailabilityFilter.Available : LineupAvailabilityFilter.Unavailable;
         _showAllRecommendations = false;
         Rebuild();
         if (FindScroll(this) is { } sv) sv.ScrollToTop();
@@ -120,25 +127,28 @@ public partial class LineupListView : UserControl
         var recs = _vm.Recommendations.ToDictionary(r => r.Lineup.Id);
 
         // 本局推荐
-        bool hasRun = _vm.HasRunInfo && _vm.Lineups.Count > 0;
+        bool hasRun = _vm.HasRunInfo && _vm.Lineups.Count > 0
+            && _vm.SelectedAvailabilityFilter == LineupAvailabilityFilter.Pending;
         RecommendSection.Visibility = hasRun ? Visibility.Visible : Visibility.Collapsed;
+        var matching = _vm.FilteredLineups.Select(l => l.Id).ToHashSet(StringComparer.Ordinal);
         if (hasRun)
         {
-            var shown = _showAllRecommendations ? _vm.Recommendations.ToList() : _vm.Recommendations.Take(RecommendShown).ToList();
+            var recommendations = _vm.Recommendations.Where(r => matching.Contains(r.Lineup.Id)).ToList();
+            var shown = _showAllRecommendations ? recommendations : recommendations.Take(RecommendShown).ToList();
             RecommendItems.ItemsSource = shown.Select((r, i) => LineupCardItem.From(r.Lineup, r, _vm, isRecommendation: true,
                 isBest: i == 0 && r.Kind <= RecommendationKind.BannedButFine)).ToList();
-            int usable = _vm.Recommendations.Count(r => r.Kind <= RecommendationKind.BannedButFine);
-            RecommendMeta.Text = usable > 0 ? $"{usable} 套能直接用" : "没有能直接用的，可以修补";
-            RecommendMore.Content = _showAllRecommendations ? "收起" : $"全部 {_vm.Recommendations.Count} 套";
-            RecommendMore.Visibility = _vm.Recommendations.Count > RecommendShown ? Visibility.Visible : Visibility.Collapsed;
+            RecommendMeta.Text = $"{recommendations.Count} 套待确认";
+            RecommendMore.Content = _showAllRecommendations ? "收起" : $"全部 {recommendations.Count} 套";
+            RecommendMore.Visibility = recommendations.Count > RecommendShown ? Visibility.Visible : Visibility.Collapsed;
             BannedAvatars.ItemsSource = _vm.RunBannedNames.Select(n => new LineupAvatarItem(n, false)).ToList();
             BannedCovenantsList.ItemsSource = _vm.RunBannedCovenants.ToList();
             BannedStrip.Visibility = _vm.RunBannedNames.Count + _vm.RunBannedCovenants.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+        else RecommendItems.ItemsSource = Array.Empty<LineupCardItem>();
 
         // 全部
-        LineupItems.ItemsSource = _vm.FilteredLineups
-            .Select(l => LineupCardItem.From(l, recs.GetValueOrDefault(l.Id), _vm, isRecommendation: false, isBest: false)).ToList();
+        LineupItems.ItemsSource = hasRun ? Array.Empty<LineupCardItem>() : _vm.FilteredLineups
+            .Select(l => LineupCardItem.From(l, recs.GetValueOrDefault(l.Id), _vm, isRecommendation: false, isBest: false)).ToArray();
         int total = _vm.Lineups.Count, matched = _vm.FilteredLineups.Count;
         bool filtered = matched != total;
         CountText.Text = filtered ? $"符合 {matched} 套" : $"{total} 套阵容";

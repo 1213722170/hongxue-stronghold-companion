@@ -7,22 +7,35 @@ using ASPAssistant.Core.Services;
 
 namespace ASPAssistant.Core.ViewModels;
 
+public enum LineupAvailabilityFilter { All, Available, Pending, Unavailable }
+
 /// <summary>
 /// 已保存阵容列表 + 增删改 + 激活盟约统计访问。
 /// </summary>
 public partial class LineupViewModel : ObservableObject
 {
     private readonly LineupStore _store;
-    private Func<string, bool> _isBanned = _ => false;
     public CovenantCalculator Calculator { get; }
 
     public ObservableCollection<Lineup> Lineups { get; } = [];
 
     [ObservableProperty]
-    private AvailabilityFilter _selectedAvailabilityFilter;
+    private LineupAvailabilityFilter _selectedAvailabilityFilter;
 
-    public IReadOnlyList<Lineup> VisibleLineups => [.. Lineups.Where(lineup => SelectedAvailabilityFilter == AvailabilityFilter.All
-        || lineup.Slots.All(slot => !_isBanned(slot.OperatorName)) == (SelectedAvailabilityFilter == AvailabilityFilter.Available))];
+    public IReadOnlyList<Lineup> VisibleLineups
+    {
+        get
+        {
+            if (SelectedAvailabilityFilter == LineupAvailabilityFilter.All) return [.. Lineups];
+            var matching = Recommendations.Where(r => SelectedAvailabilityFilter == LineupAvailabilityFilter.Available
+                    ? r.Kind == RecommendationKind.Usable
+                    : SelectedAvailabilityFilter == LineupAvailabilityFilter.Pending
+                        ? r.Kind is RecommendationKind.BannedButFine or RecommendationKind.NeedsRepair
+                        : r.Kind == RecommendationKind.Broken)
+                .Select(r => r.Lineup.Id).ToHashSet(StringComparer.Ordinal);
+            return [.. Lineups.Where(l => matching.Contains(l.Id))];
+        }
+    }
 
     public LineupViewModel(LineupStore store, CovenantCalculator calculator)
     {
@@ -37,19 +50,9 @@ public partial class LineupViewModel : ObservableObject
         foreach (var lineup in lineups) Lineups.Add(lineup);
     }
 
-    public void SetBanChecker(Func<string, bool> checker)
-    {
-        _isBanned = checker;
-        RefreshAvailability();
-    }
+    public void RefreshAvailability() => Refresh();
 
-    public void RefreshAvailability()
-    {
-        OnPropertyChanged(nameof(VisibleLineups));
-        Refresh();
-    }
-
-    partial void OnSelectedAvailabilityFilterChanged(AvailabilityFilter value) => RefreshAvailability();
+    partial void OnSelectedAvailabilityFilterChanged(LineupAvailabilityFilter value) => RefreshAvailability();
 
     public bool CanMove(Lineup lineup, int direction)
     {
@@ -181,8 +184,8 @@ public partial class LineupViewModel : ObservableObject
     public IReadOnlyCollection<string> RunBannedCovenants => _bannedCovenants;
 
     /// <summary>
-    /// This run's bans: <paramref name="unavailable"/> tells whether an operator is out (banned, or every covenant of
-    /// theirs is banned). Null clears the run (no recommendations).
+    /// This run's bans: <paramref name="unavailable"/> applies the shared name and covenant ban rules.
+    /// Null clears the run (no recommendations).
     /// </summary>
     public void SetRunInfo(Func<string, bool>? unavailable, IReadOnlySet<string>? bannedCovenants,
         IReadOnlyCollection<string>? bannedNames = null)
@@ -191,6 +194,11 @@ public partial class LineupViewModel : ObservableObject
         _bannedCovenants = bannedCovenants ?? new HashSet<string>();
         RunBannedNames = unavailable is null ? [] : [.. bannedNames ?? []];
         HasRunInfo = unavailable is not null;
+        if (!HasRunInfo && SelectedAvailabilityFilter != LineupAvailabilityFilter.All)
+        {
+            SelectedAvailabilityFilter = LineupAvailabilityFilter.All;
+            return;
+        }
         Refresh();
     }
 
@@ -198,15 +206,16 @@ public partial class LineupViewModel : ObservableObject
 
     private void Refresh()
     {
-        FilteredLineups.Clear();
-        foreach (var l in VisibleLineups.Where(MatchesSearch)
-                     .Where(l => LineupTargets.Matches(l, Calculator, FilterCovenants, FilterTier, FilterMatchAll)))
-            FilteredLineups.Add(l);
         Recommendations.Clear();
         if (_unavailable is { } unavailable)
             foreach (var r in LineupTargets.Rank(Lineups, Calculator, unavailable, _bannedCovenants))
                 Recommendations.Add(r);
+        FilteredLineups.Clear();
+        foreach (var l in VisibleLineups.Where(MatchesSearch)
+                     .Where(l => LineupTargets.Matches(l, Calculator, FilterCovenants, FilterTier, FilterMatchAll)))
+            FilteredLineups.Add(l);
         RefreshChips();
+        OnPropertyChanged(nameof(VisibleLineups));
         OnPropertyChanged(nameof(ActiveFilterCount));
         OnPropertyChanged(nameof(ChipFilterCount));
         OnPropertyChanged(nameof(HasActiveFilters));

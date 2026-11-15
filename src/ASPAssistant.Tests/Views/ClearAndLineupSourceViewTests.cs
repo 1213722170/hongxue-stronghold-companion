@@ -154,7 +154,7 @@ internal static class ClearAndLineupSourceViewTests
             bans.ToggleBan("乙");
             operatorVm.SelectedAvailabilityFilter = AvailabilityFilter.Available;
             operatorVm.SetAvailableCovenants(["维多利亚"]);
-            ((MenuItem)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ((Button)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEquivalentTo("乙");
             bans.BannedCovenants.Should().BeEmpty();
@@ -162,12 +162,12 @@ internal static class ClearAndLineupSourceViewTests
             panel.PlannerVm.HasRunInfo.Should().BeFalse();
             operatorVm.FilteredOperators.Should().Contain(o => o.Name == "甲").And.NotContain(o => o.Name == "乙");
             bans.SetCovenantBans(["炎"]);
-            ((MenuItem)runView.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ((Button)runView.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEmpty();
             bans.BannedCovenants.Should().BeEmpty();
             operatorVm.FilteredOperators.Should().HaveCount(4);
-            lineups.SelectedAvailabilityFilter = AvailabilityFilter.Available;
+            lineups.SelectedAvailabilityFilter.Should().Be(LineupAvailabilityFilter.All);
             lineups.VisibleLineups.Should().HaveCount(2);
             operatorVm.SelectedAvailabilityFilter = AvailabilityFilter.All;
             var inputModel = new InputModel { Text = "测试输入" };

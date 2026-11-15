@@ -44,6 +44,26 @@ public static class WindowGeometry
         return new RECT { Left = left, Top = top, Right = left + width, Bottom = top + height };
     }
 
+    public static RECT SnapBounds(RECT bounds, RECT workArea, double dpiScale, RECT? game)
+    {
+        var x = new List<int> { workArea.Left, workArea.Right - bounds.Width };
+        var y = new List<int> { workArea.Top, workArea.Bottom - bounds.Height };
+        if (game is { } g)
+        {
+            if (bounds.Bottom > g.Top && bounds.Top < g.Bottom)
+                x.AddRange([g.Left - bounds.Width, g.Left, g.Right - bounds.Width, g.Right]);
+            if (bounds.Right > g.Left && bounds.Left < g.Right)
+                y.AddRange([g.Top - bounds.Height, g.Top, g.Bottom - bounds.Height, g.Bottom]);
+        }
+        var left = x.Where(p => p >= workArea.Left && p + bounds.Width <= workArea.Right
+                && Math.Abs(p - bounds.Left) <= 12 * dpiScale)
+            .OrderBy(p => Math.Abs(p - bounds.Left)).Cast<int?>().FirstOrDefault() ?? bounds.Left;
+        var top = y.Where(p => p >= workArea.Top && p + bounds.Height <= workArea.Bottom
+                && Math.Abs(p - bounds.Top) <= 12 * dpiScale)
+            .OrderBy(p => Math.Abs(p - bounds.Top)).Cast<int?>().FirstOrDefault() ?? bounds.Top;
+        return ClampBounds(new RECT { Left = left, Top = top, Right = left + bounds.Width, Bottom = top + bounds.Height }, workArea);
+    }
+
     public static SidePanelOffset CaptureFollowOffset(RECT game, SidePanelPlacement placement, double dpiScale)
         => new((placement.Left - game.Right) / dpiScale, (placement.Top - game.Top) / dpiScale);
 

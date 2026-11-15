@@ -52,7 +52,7 @@ public partial class PlannerCovenantItem : ObservableObject
         : IsCore ? "本局已被 Ban，不能作为目标。"
         : FirstUnreachable ? $"本局已被 Ban，剩余可用持有者只有 {AvailableMembers} 人，凑不齐 Ⅰ，不能作为目标。"
         : SecondUnreachable ? $"本局已被 Ban：剩余可用持有者 {AvailableMembers} 人，只能规划 Ⅰ。"
-        : $"本局已被 Ban：自身盟约全部被 Ban 的干员被移出，其余 {AvailableMembers} 名持有者仍可凑人数（不能转职进这个盟约）。";
+        : $"本局已被 Ban：剩余 {AvailableMembers} 名可用持有者仍可凑人数（不能转职进这个盟约）。";
     public bool HasBanNote => IsBanned;
 
     /// <summary>Second line of a goal tile: how many holders are left this run.</summary>
@@ -110,8 +110,8 @@ public partial class PlannerCovenantItem : ObservableObject
     public bool IsLevel2 => Level == 2;
     public bool IsSelected => Level > 0;
     /// <summary>
-    /// A banned core covenant cannot be targeted. A banned additional covenant only removes the operators whose
-    /// covenants are all banned, so it can still be reached with the remaining operators and stays selectable.
+    /// A banned core covenant cannot be targeted. A banned additional covenant removes coreless operators only
+    /// when all their additional covenants are banned, so remaining holders can still reach it.
     /// </summary>
     public bool IsBlocked => IsBanned && (IsCore || FirstUnreachable);
     public bool IsEnabled => !IsBlocked;
@@ -136,6 +136,9 @@ public sealed partial class PlannerLockedOperator : ObservableObject
     public Operator Operator { get; }
     public string Initial => Name.Length > 0 ? Name[..1] : "?";
     public IRelayCommand RemoveCommand { get; }
+
+    [ObservableProperty]
+    private bool _isUnavailable;
 }
 
 public sealed class PlannerOperatorItem
@@ -203,7 +206,7 @@ public sealed partial class PlannerLineupItem : ObservableObject
     {
         Id = _lineupId,
         Name = LineupName,
-        Slots = PlannerLineupItem.Slots(Source.Operators, equipmentRules).Concat(MechSlots(Source, equipmentRules)).ToList(),
+        Slots = PlannerLineupItem.Slots(Source.Operators, equipmentRules).Concat(StrategyPieceSlots(Source, equipmentRules)).ToList(),
         Strategies = StrategySlots(Source.Strategy)
     };
 
@@ -215,9 +218,14 @@ public sealed partial class PlannerLineupItem : ObservableObject
                 [LineupEquipmentService.Shapeshifter, equipmentRules.EquipmentFor(o.TransformedCovenant)]
         });
 
-    /// <summary>暴躁铁皮 with one 变形同构体 and the job-change gear of each covenant it carries.</summary>
-    internal static IEnumerable<LineupSlot> MechSlots(PlannedLineup lineup, LineupEquipmentService equipmentRules)
+    /// <summary>The strategy's own operator, including 暴躁铁皮's transformation gear.</summary>
+    internal static IEnumerable<LineupSlot> StrategyPieceSlots(PlannedLineup lineup, LineupEquipmentService equipmentRules)
     {
+        if (lineup.Strategy == PlannerStrategy.Pith)
+        {
+            yield return new LineupSlot { OperatorName = PlannerStrategies.PithName };
+            yield break;
+        }
         if (lineup.Strategy != PlannerStrategy.Mech) yield break;
         var gear = lineup.MechCovenants.Where(equipmentRules.CanTransformInto).Select(equipmentRules.EquipmentFor).ToList();
         yield return new LineupSlot
@@ -352,7 +360,7 @@ public partial class LineupPlannerViewModel : ObservableObject
     public string StrategyHint => Strategy switch
     {
         PlannerStrategy.Mech => $"暴躁铁皮占 1 人口，最多转 {PlannerStrategies.MechTransformCap(MechElite)} 个盟约" + (MechElite ? "（精锐）" : "（精锐 5 个）"),
-        PlannerStrategy.Pith => "Pith 占 1 人口：本局已激活的核心盟约各 +1 人",
+        PlannerStrategy.Pith => "盟约·辅助干员占 1 人口：本局已激活的核心盟约各 +1 人",
         PlannerStrategy.Shapeshifter => "最多送 3 个变形同构体（第 5、10、15 回合），可规划 3 次转职",
         _ => "带的是其他策略时规划不受影响"
     };
@@ -368,6 +376,7 @@ public partial class LineupPlannerViewModel : ObservableObject
     partial void OnStrategyChanged(PlannerStrategy value)
     {
         if (value != PlannerStrategy.Mech) MechElite = false;
+        OnLockSearchTextChanged(LockSearchText);
         RequestRecompute();
     }
 
@@ -382,6 +391,7 @@ public partial class LineupPlannerViewModel : ObservableObject
     private CancellationTokenSource? _routeCts;
     private readonly BanViewModel _banVm;
     private readonly IReadOnlyList<Operator> _operators;
+    private readonly IReadOnlyList<Operator> _strategyOperators;
     private readonly Dictionary<string, Operator> _operatorByName;
     private readonly Dictionary<string, string> _allOperatorIcons;
     private IReadOnlySet<string> _availableCovenants = new HashSet<string>();
@@ -401,6 +411,7 @@ public partial class LineupPlannerViewModel : ObservableObject
         _banVm = banVm;
         // Strategy-only pieces (“暴躁铁皮”) never appear in the shop pool, so neither planner uses them.
         _operators = operators.Where(o => o.RequiredStrategyId.Length == 0).ToList();
+        _strategyOperators = operators.Where(o => o.RequiredStrategyId.Length > 0).ToList();
         _routePlanner = new LineupRoutePlanner(_operators, planner.Covenants);
         _operatorByName = _operators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         _allOperatorIcons = operators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First().IconPath, StringComparer.Ordinal);
@@ -410,6 +421,7 @@ public partial class LineupPlannerViewModel : ObservableObject
         foreach (var p in PeopleOptions)
             foreach (var t in TransformOptions)
                 VariantCells.Add(new PlannerVariantCell { People = p, Transforms = t });
+        LockedOperators.CollectionChanged += (_, _) => RefreshLockedOperators();
         banVm.BansChanged += OnBansChanged;
         ApplyBans();
         UpdateStatus();
@@ -526,7 +538,9 @@ public partial class LineupPlannerViewModel : ObservableObject
     {
         if (RepairSource is not { } source) return "";
         var before = source.Slots.Select(s => s.OperatorName).Where(n => n.Length > 0).ToHashSet(StringComparer.Ordinal);
-        var after = lineup.Operators.Select(o => o.Name).ToHashSet(StringComparer.Ordinal);
+        var after = lineup.Operators.Select(o => o.Name)
+            .Concat(PlannerLineupItem.StrategyPieceSlots(lineup, _equipmentRules).Select(s => s.OperatorName))
+            .ToHashSet(StringComparer.Ordinal);
         var removed = before.Where(n => !after.Contains(n)).ToList();
         var added = lineup.Operators.Select(o => o.Name).Where(n => !before.Contains(n)).ToList();
         if (removed.Count == 0 && added.Count == 0) return "";
@@ -600,6 +614,7 @@ public partial class LineupPlannerViewModel : ObservableObject
 
     public bool HasGoals => SelectedGoalCount > 0;
     public bool HasLocked => LockedOperators.Count > 0;
+    public int ActiveLockedCount => LockedOperators.Count(item => !item.IsUnavailable);
     public bool HasVisibleLineups => VisibleLineups.Count > 0;
     public string EmptyResultText => SelectedGoalCount == 0 ? "先在“目标”里选择盟约。"
         : IsBusy ? "正在搜索…"
@@ -644,8 +659,8 @@ public partial class LineupPlannerViewModel : ObservableObject
         LockSuggestions.Clear();
         var text = value.Trim();
         if (text.Length == 0) return;
-        foreach (var op in _operators
-                     .Where(o => o.IsAvailableForSelection && o.Name.Contains(text, StringComparison.OrdinalIgnoreCase) && LockedOperators.All(l => l.Name != o.Name))
+        foreach (var op in _operators.Concat(_strategyOperators.Where(o => o.RequiredStrategyId == PlannerStrategies.StrategyId(Strategy)))
+                     .Where(o => o.IsAvailableForSelection && SearchMatch.Matches(text, o.Name) && LockedOperators.All(l => l.Name != o.Name))
                      .OrderBy(o => o.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                      .ThenBy(o => o.Name.Length)
                      .Take(8))
@@ -684,11 +699,9 @@ public partial class LineupPlannerViewModel : ObservableObject
     {
         name = name?.Trim();
         if (string.IsNullOrEmpty(name)) return false;
-        if (!_operatorByName.TryGetValue(name, out var op))
-        {
-            op = LockSuggestions.FirstOrDefault();
-            if (op is null) return false;
-        }
+        var op = _operatorByName.GetValueOrDefault(name) ?? _strategyOperators.FirstOrDefault(o => o.Name == name)
+            ?? LockSuggestions.FirstOrDefault();
+        if (op is null || op.RequiredStrategyId.Length > 0) return false;
         if (LockedOperators.Any(l => l.Name == op.Name)) { LockSearchText = ""; return false; }
         if (LockedOperators.Count >= LineupPlanner.MaxLockedOperators) return false;
         LockedOperators.Add(new PlannerLockedOperator(op, RemoveLocked));
@@ -787,19 +800,29 @@ public partial class LineupPlannerViewModel : ObservableObject
             else if (c.Level == 2 && !c.CanPlanSecond) { c.Level = 1; goalDropped = true; }
         }
         if (goalDropped) RefreshGoalChips();
+        RefreshLockedOperators();
         UpdateRunInfo();
+    }
+
+    private bool IsUnavailable(Operator op) =>
+        _banVm.IsBanned(op.Name) || _planner.IsExcludedByBans(op, _banVm.BannedCovenants);
+
+    private void RefreshLockedOperators()
+    {
+        foreach (var item in LockedOperators)
+            item.IsUnavailable = IsUnavailable(item.Operator);
+        OnPropertyChanged(nameof(ActiveLockedCount));
     }
 
     private void RefreshMembers()
     {
-        var bannedCovenants = _banVm.BannedCovenants;
         foreach (var c in AllCovenants)
         {
             c.Members = _operators
                 .Where(o => o.IsAvailableForSelection && (o.CoreCovenants.Contains(c.Name) || o.AdditionalCovenants.Contains(c.Name)))
                 .OrderBy(o => o.Tier).ThenBy(o => o.Name, StringComparer.Ordinal)
                 .Select(o => new PlannerCovenantMember(o.Name, o.IconPath, o.Tier,
-                    _banVm.IsBanned(o.Name) || _planner.IsExcludedByBans(o, bannedCovenants), o))
+                    IsUnavailable(o), o))
                 .ToList();
         }
     }
@@ -1029,7 +1052,7 @@ public partial class LineupPlannerViewModel : ObservableObject
             Goals = AllCovenants.Where(c => c.IsSelected).Select(c => LineupPlanner.CreateGoal(c.Info, c.Level)).ToList(),
             BannedCovenants = bannedCovenants,
             BannedOperators = new HashSet<string>(_banVm.BannedNames, StringComparer.Ordinal),
-            LockedOperators = LockedOperators.Select(l => l.Name).ToHashSet(StringComparer.Ordinal),
+            LockedOperators = LockedOperators.Where(l => !l.IsUnavailable).Select(l => l.Name).ToHashSet(StringComparer.Ordinal),
             TransformAllowed = _planner.DefaultTransformAllowed(bannedCovenants).Where(_equipmentRules.CanTransformInto).ToHashSet(),
             PeopleOptions = PeopleOptions,
             TransformOptions = TransformOptions,
@@ -1078,7 +1101,7 @@ public partial class LineupPlannerViewModel : ObservableObject
             {
                 bool MeetsTargets(PlannedLineup plan)
                 {
-                    var slots = RepairSlots(source, PlannerLineupItem.Slots(plan.Operators, _equipmentRules).Concat(PlannerLineupItem.MechSlots(plan, _equipmentRules)));
+                    var slots = RepairSlots(source, PlannerLineupItem.Slots(plan.Operators, _equipmentRules).Concat(PlannerLineupItem.StrategyPieceSlots(plan, _equipmentRules)));
                     var counts = _repairCalculator.Compute(new Lineup { Slots = slots, Strategies = source.Strategies }).ToDictionary(s => s.Name, s => s.Count);
                     return request.Goals.All(g => counts.GetValueOrDefault(g.Name) >= g.Count);
                 }
@@ -1246,7 +1269,8 @@ public partial class LineupPlannerViewModel : ObservableObject
                     covenants.Count > 0 ? $"转职 → {string.Join("、", covenants)}" : "协防干员 · 转职在后期叠层前完成",
                     covenants.Count > 0 ? $"转×{covenants.Count}" : "");
             case PlannerStrategy.Pith:
-                return new PlannerStrategyPiece(PlannerStrategies.PithName, "", "调和 · 已激活核心盟约各 +1", "");
+                return new PlannerStrategyPiece(PlannerStrategies.PithName,
+                    _allOperatorIcons.GetValueOrDefault(PlannerStrategies.PithName, ""), "调和 · 已激活核心盟约各 +1", "");
             default:
                 return null;
         }

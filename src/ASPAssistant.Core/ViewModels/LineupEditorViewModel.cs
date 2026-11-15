@@ -43,7 +43,9 @@ public partial class LineupEditorViewModel : ObservableObject
                 {
                     var op = AllOperators.FirstOrDefault(o => o.Name == slot.OperatorName);
                     if (op is not null && !CanSelectOperator(op))
-                        return $"{phase}的{slot.OperatorName}需要在策略中添加森蚺的“暴躁铁皮”策略";
+                        return op.RequiredStrategyId == PlannerStrategies.PithId
+                            ? $"{phase}的{slot.OperatorName}需要在策略中添加Pith的“优等生”策略"
+                            : $"{phase}的{slot.OperatorName}需要在策略中添加森蚺的“暴躁铁皮”策略";
                     if (!string.IsNullOrEmpty(slot.TransformedCovenant))
                         return $"{slot.OperatorName}的旧转职“{slot.TransformedCovenant}”没有对应装备，请重新选择或清除";
                     if (slot.Equipments.Count > LineupEquipmentService.Capacity(slot))
@@ -236,7 +238,9 @@ public partial class LineupEditorViewModel : ObservableObject
         {
             var op = AllOperators.FirstOrDefault(o => o.Name == operatorName);
             if (op is not null && !CanSelectOperator(op))
-                throw new InvalidOperationException("必须在策略中添加森蚺的“暴躁铁皮”策略");
+                throw new InvalidOperationException(op.RequiredStrategyId == PlannerStrategies.PithId
+                    ? "必须在策略中添加Pith的“优等生”策略"
+                    : "必须在策略中添加森蚺的“暴躁铁皮”策略");
             var slot = Slots[slotIndex];
             slot.OperatorName = operatorName;
             // 触发 ItemsControl 刷新（LineupSlot 是 POCO，集合变更通知更可靠）

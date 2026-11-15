@@ -150,7 +150,8 @@ def build_traits(chess_entry: dict, garrison_dict: dict) -> list[dict]:
         if gar:
             return [{
                 "traitType": gar["eventTypeDesc"],
-                "traitDescription": strip_rich_text(gar["garrisonDesc"]),
+                "traitDescription": strip_rich_text(chess_entry["desc"]
+                    if "{showtag_" in gar["garrisonDesc"] else gar["garrisonDesc"]),
             }]
     return []
 
@@ -195,7 +196,7 @@ def process_operators(
         shop_entry = char_shop_dict.get(chess_id)
         if not shop_entry:
             continue
-        strategy_id = "band_mech" if shop_entry["charId"] == "char_618_acrbot" else ""
+        strategy_id = {"char_618_acrbot": "band_mech", "char_616_pithst": "band_pith"}.get(shop_entry["charId"], "")
         if shop_entry["isHidden"] and not strategy_id:
             continue
 

@@ -58,10 +58,11 @@ internal static class LineupRecommendationViewTests
             tracking.TrackLineup(safe);
             bans.SetBans(["乙"]);
             bans.SetCovenantBans(["乌萨斯"]);
+            lineups.SelectedAvailabilityFilter = LineupAvailabilityFilter.Pending;
             Pump();
             ((FrameworkElement)view.FindName("RecommendSection")).Visibility.Should().Be(Visibility.Visible);
             var recommendations = ((ItemsControl)view.FindName("RecommendItems")).Items.Cast<LineupCardItem>().ToList();
-            recommendations.Select(r => r.Recommendation!.Kind).Should().Equal(RecommendationKind.Usable, RecommendationKind.NeedsRepair, RecommendationKind.Broken);
+            recommendations.Select(r => r.Recommendation!.Kind).Should().Equal(RecommendationKind.NeedsRepair);
             foreach (var many in new[] { false, true })
             {
                 bans.SetBans(many ? manyBans : ["乙"]);
@@ -82,7 +83,7 @@ internal static class LineupRecommendationViewTests
                     var strip = (FrameworkElement)view.FindName("BannedStrip");
                     var avatars = (ItemsControl)view.FindName("BannedAvatars");
                     var rendered = Descendants<Avatar>(avatars).ToList();
-                    rendered.Should().HaveCount(many ? 40 : 1);
+                    rendered.Should().HaveCount(lineups.RunBannedNames.Count);
                     foreach (var avatar in rendered)
                     {
                         var bounds = avatar.TransformToAncestor(strip).TransformBounds(new Rect(0, 0, avatar.ActualWidth, avatar.ActualHeight));
@@ -103,6 +104,7 @@ internal static class LineupRecommendationViewTests
             bans.SetBans(["乙"]);
             bans.SetCovenantBans(["乌萨斯"]);
             Pump();
+            lineups.SelectedAvailabilityFilter = LineupAvailabilityFilter.All;
             var search = (TextBox)view.FindName("SearchBox");
             search.Text = "安全";
             Pump();
@@ -128,6 +130,17 @@ internal static class LineupRecommendationViewTests
             Pump();
             lineups.FilteredLineups.Should().Equal(affected);
             affected.Slots[0].CandidateEquipments.Single().Name.Should().Be("候选盾");
+            bans.ClearBans();
+            operatorsVm.SetAvailableCovenants(["炎", "谢拉格", "乌萨斯", "维多利亚"]);
+            panel.ShowLineupsSegment(planner: false);
+            Pump();
+            lineups.HasRunInfo.Should().BeTrue("recorded information with zero bans is still a known run");
+            lineups.SelectedAvailabilityFilter.Should().Be(LineupAvailabilityFilter.Available);
+            lineups.VisibleLineups.Should().HaveCount(3);
+            operatorsVm.ClearCovenantHighlights();
+            Pump();
+            lineups.HasRunInfo.Should().BeFalse();
+            lineups.SelectedAvailabilityFilter.Should().Be(LineupAvailabilityFilter.All);
             panel.Close();
         }
     }

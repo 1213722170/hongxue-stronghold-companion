@@ -36,6 +36,15 @@ public static class User32
     [DllImport("user32.dll")]
     public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+
+    public static void SetWindowLayer(IntPtr hwnd, bool topmost)
+    {
+        if (!SetWindowPos(hwnd, topmost ? new IntPtr(-1) : new IntPtr(1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+    }
+
     public static string GetWindowTitle(IntPtr hwnd)
     {
         var text = new StringBuilder(512);

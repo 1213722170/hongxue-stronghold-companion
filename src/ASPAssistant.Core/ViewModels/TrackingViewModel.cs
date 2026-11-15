@@ -415,7 +415,7 @@ public partial class TrackingViewModel : ObservableObject
 
     /// <summary>Operators who want <paramref name="equipment"/>, and how (for the tracking list's subtitle).</summary>
     public IReadOnlyList<(string Operator, TrackedEquipmentKind Kind)> EquipmentWanters(string equipment)
-        => [.. TrackedOperators.Where(e => !e.IsAcquired).SelectMany(e => e.Equipments.Contains(equipment)
+        => [.. TrackedOperators.SelectMany(e => e.Equipments.Contains(equipment)
                 ? [(e.Name, TrackedEquipmentKind.Planned)]
                 : e.CandidateEquipments.Where(c => c.Name == equipment)
                     .Select(c => (e.Name, c.IsPriority ? TrackedEquipmentKind.Priority : TrackedEquipmentKind.Candidate)))];
@@ -457,7 +457,7 @@ public partial class TrackingViewModel : ObservableObject
         {
             if (!required.TryGetValue(name, out var had) || kind < had) required[name] = kind;
         }
-        foreach (var op in TrackedOperators.Where(e => !e.IsAcquired))
+        foreach (var op in TrackedOperators)
         {
             foreach (var name in op.Equipments) Want(name, TrackedEquipmentKind.Planned);
             foreach (var c in op.CandidateEquipments)

@@ -9,7 +9,7 @@
         WindowStyle="None"
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="True"
-        Topmost="True"
+        Topmost="False"
         Cursor="Arrow"
         Icon="{StaticResource AspaLogo}"
         Background="{DynamicResource PanelBackgroundBrush}">
@@ -381,6 +381,15 @@
                                                 <TextBlock Text="开启后追踪新阵容会追加；关闭时替换当前列表" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
                                             </StackPanel>
                                         </DockPanel>
+                                        <Border Height="1" Margin="-10,10" Background="{DynamicResource LineBrush}" />
+                                        <DockPanel>
+                                            <CheckBox x:Name="AutomaticPurchaseTrackingToggle" DockPanel.Dock="Right" Style="{StaticResource SwitchToggle}" VerticalAlignment="Center"
+                                                      AutomationProperties.Name="自动标记购买（实验性）" />
+                                            <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <TextBlock Text="自动标记购买（实验性）" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                <TextBlock Text="购买干员或已追踪装备后，自动标记为已获取" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </DockPanel>
                                         <!-- Deployment grid overlay: retired (the placement labels are enough); kept hidden for its handlers. -->
                                         <Border Height="1" Margin="-10,10" Background="{DynamicResource LineBrush}" Visibility="Collapsed" />
                                         <DockPanel Visibility="Collapsed">
@@ -412,18 +421,32 @@
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="隐藏助手" Style="{StaticResource SettingsCaption}" />
+                                <StackPanel x:Name="QuickRecognitionPanel">
+                                <TextBlock Text="快捷键设置" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
                                     <StackPanel>
                                         <TextBlock Text="隐藏 / 显示助手快捷键" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
                                         <TextBlock Text="隐藏到托盘，后台识别继续；再次按下或点击托盘图标恢复" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,8" />
                                         <DockPanel>
                                             <Button x:Name="ClearHotkeyButton" Tag="{StaticResource IconClose}" Width="24" Height="24" ToolTip="清除快捷键" AutomationProperties.Name="清除快捷键" DockPanel.Dock="Right" Click="OnClearAssistantHotkey" Style="{StaticResource RowIconButton}" Margin="6,0,0,0" />
-                                            <TextBox x:Name="AssistantHotkeyBox" Style="{StaticResource DialogTextBox}" Text="未设置（点击录入）" IsReadOnly="True" PreviewKeyDown="OnAssistantHotkeyKeyDown" AutomationProperties.Name="隐藏助手快捷键" VerticalContentAlignment="Center" />
+                                            <TextBox x:Name="AssistantHotkeyBox" Style="{StaticResource DialogTextBox}" Height="28" MinHeight="28" Padding="8,3" Text="未设置（点击录入）" IsReadOnly="True" PreviewKeyDown="OnAssistantHotkeyKeyDown" AutomationProperties.Name="隐藏助手快捷键" VerticalContentAlignment="Center" />
                                         </DockPanel>
                                         <TextBlock x:Name="AssistantHotkeyStatus" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" />
                                     </StackPanel>
                                 </Border>
+
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="快速识别快捷键" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="打开游戏本局信息页后按下，录入 Ban 位、盟约和敌人" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,8" />
+                                        <DockPanel>
+                                            <Button x:Name="ClearRecognitionHotkeyButton" Tag="{StaticResource IconClose}" Width="24" Height="24" ToolTip="清除快速识别快捷键" AutomationProperties.Name="清除快速识别快捷键" DockPanel.Dock="Right" Click="OnClearRecognitionHotkey" Style="{StaticResource RowIconButton}" Margin="6,0,0,0" />
+                                            <TextBox x:Name="RecognitionHotkeyBox" Style="{StaticResource DialogTextBox}" Height="28" MinHeight="28" Padding="8,3" Text="Ctrl + Shift + /" IsReadOnly="True" PreviewKeyDown="OnRecognitionHotkeyKeyDown" AutomationProperties.Name="快速识别快捷键" VerticalContentAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBlock x:Name="RecognitionHotkeyStatus" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                </StackPanel>
 
                                 <TextBlock Text="更新" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">

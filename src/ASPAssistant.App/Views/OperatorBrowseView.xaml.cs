@@ -18,6 +18,7 @@ public partial class OperatorBrowseView : UserControl
     public Func<string, bool>? IsTrackedCheck { get; set; }
 
     public Func<string, bool>? IsBannedCheck { get; set; }
+    public Func<string, bool>? IsCovenantBannedCheck { get; set; }
     public event Action? ManageCustomOperatorsRequested;
 
     private void OnManageCustomOperators(object sender, RoutedEventArgs e) => ManageCustomOperatorsRequested?.Invoke();

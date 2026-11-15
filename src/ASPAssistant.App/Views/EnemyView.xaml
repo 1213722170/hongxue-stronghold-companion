@@ -8,19 +8,9 @@
     <UserControl.Resources>
         <converters:LocalPathToImageConverter x:Key="LocalPathToImage" />
     </UserControl.Resources>
-    <DockPanel LastChildFill="True">
-        <StackPanel DockPanel.Dock="Bottom" Margin="10,6,10,10">
-            <TextBlock x:Name="RecognitionStatusText" Text="{Binding RecognitionStatus}"
-                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
-                       TextWrapping="Wrap" Margin="2,0,0,6" />
-            <Button x:Name="RecognizeEnemyButton" Content="识别本局敌人" Height="34" HorizontalAlignment="Stretch"
-                    Style="{StaticResource SmallActionButton}" FontSize="12"
-                    IsEnabled="{Binding CanRecognize}" Click="OnRecognizeEnemy"
-                    ToolTip="打开游戏内的本局信息页后点击" />
-        </StackPanel>
     <Grid>
-    <controls:EmptyState Icon="{StaticResource IconEnemy}" Title="还没有识别本局敌人"
-                         Hint="开局时打开游戏内的本局信息页，再点下方“识别本局敌人”，首领和特训敌人会显示在这里。">
+    <controls:EmptyState Icon="{StaticResource IconEnemy}" Title="还没有识别本局信息"
+                         Hint="开局时没有自动获取对局信息，进入游戏后打开本局信息页面，再点击上方'截屏录入'，对局信息会显示在这了">
         <controls:EmptyState.Style>
             <Style TargetType="controls:EmptyState">
                 <Setter Property="Visibility" Value="Collapsed" />
@@ -503,5 +493,4 @@
         </StackPanel>
     </ScrollViewer>
     </Grid>
-    </DockPanel>
 </UserControl>

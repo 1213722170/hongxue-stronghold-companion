@@ -73,6 +73,7 @@ public partial class OperatorPickerWindow : Window
             GoalPills.ItemsSource = context.Targets.Select(t => new GoalPill(t.Name, $"{t.Label} {t.Count}/{t.Needed}", t.Reached)).ToList();
         }
         if (context is null || context.Targets.All(t => t.Reached)) ScopeTargets.IsEnabled = false;
+        ScopeList.Visibility = Visibility.Collapsed;
         _filters.FilteredOperators.CollectionChanged += (_, _) => UpdateCount();
         Loaded += (_, _) => { ApplyScope(); SearchBox.Focus(); };
         Closed += (_, _) => _effects = new();
@@ -81,7 +82,8 @@ public partial class OperatorPickerWindow : Window
     /// <summary>Why an operator cannot go here (null = it can).</summary>
     private string? Unavailable(Operator op)
     {
-        if (op.RequiredStrategyId.Length > 0 && !_strategies.Contains(op.RequiredStrategyId)) return "必须在策略中添加森蚺策略";
+        if (op.RequiredStrategyId.Length > 0 && !_strategies.Contains(op.RequiredStrategyId))
+            return op.RequiredStrategyId == PlannerStrategies.PithId ? "必须在策略中添加Pith的“优等生”策略" : "必须在策略中添加森蚺策略";
         if (_context?.InLineup.Contains(op.Name) == true) return "已在阵容";
         return null;
     }
@@ -130,7 +132,8 @@ public partial class OperatorPickerWindow : Window
     {
         var view = CollectionViewSource.GetDefaultView(OperatorsList.ItemsSource);
         if (view is null) return;
-        view.Filter = _onlyTargets ? o => _effects.TryGetValue(((Operator)o).Name, out var e) && e.HelpsTarget : null;
+        if (_onlyTargets || view.Filter is not null)
+            view.Filter = _onlyTargets ? o => _effects.TryGetValue(((Operator)o).Name, out var e) && e.HelpsTarget : null;
         UpdateCount();
     }
 

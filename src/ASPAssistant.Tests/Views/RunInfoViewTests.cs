@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -42,7 +43,6 @@ internal static class RunInfoViewTests
             operators, [], [], new SettingsManager(folder), theme, new SidePanelPositionSettings { FreeMovement = true }, covenants: covenants)
         { Opacity = 0, ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000, Height = 1000 };
         var run = (RunBanView)panel.FindName("RunBanView");
-        var menuButton = (Button)run.FindName("RunMenuButton");
         try
         {
             panel.Show();
@@ -54,12 +54,25 @@ internal static class RunInfoViewTests
             var pills = (ItemsControl)run.FindName("BanCovenantPills");
             var portraits = (ItemsControl)run.FindName("BannedOperators");
             var meta = (TextBlock)run.FindName("BanBannerMeta");
+            var detailsToggle = (ToggleButton)run.FindName("BanDetailsToggle");
+            var details = (StackPanel)run.FindName("BanDetailsPanel");
             ((OperatorBrowseView)panel.FindName("OperatorView")).FindName("ManualScanButton").Should().BeNull();
+            panel.Width = 360;
+            enemy.Clear();
+            Pump();
+            Descendants<TextBlock>(run).Should().Contain(t => t.Text == "对局信息");
+            enemyView.FindName("RecognizeEnemyButton").Should().BeNull();
+            enemyView.FindName("RecognitionStatusText").Should().BeNull();
+            Descendants<TextBlock>(enemyView).Should().Contain(t => t.Text.Contains("开局时没有自动获取对局信息"));
+            Save((FrameworkElement)tab.Content, $"{theme}-{night}-empty");
+            enemy.Update(new(boss.Name, ["特训敌人·元素"], []), boss, [new() { TypeName = "元素" }]);
+            enemy.RegulationLevel = 7;
             var names = new[] { "卡西米尔", "维多利亚", "乌萨斯", "阿戈尔" };
             foreach (var width in new[] { 280, 360, 400 })
             foreach (var count in new[] { 0, 1, 40 })
             {
                 panel.Width = width;
+                detailsToggle.IsChecked = true;
                 bans.SetBans(operators.Take(count).Select(o => o.Name));
                 bans.SetCovenantBans(count == 0 ? [] : names);
                 Pump();
@@ -67,7 +80,7 @@ internal static class RunInfoViewTests
                 enemyView.IsVisible.Should().BeTrue();
                 scan.IsEnabled.Should().BeTrue();
                 scan.Content.Should().Be(count == 0 ? "截屏录入" : "重新录入");
-                portraits.Items.Count.Should().Be(count);
+                portraits.Items.Cast<Operator>().Select(op => op.Name).Should().BeEquivalentTo(panel.LineupVm.RunBannedNames);
                 pills.Items.Count.Should().Be(count == 0 ? 0 : 4);
                 Bounds(scan, run).Right.Should().BeLessThanOrEqualTo(run.ActualWidth + 1);
                 Bounds(meta, run).Right.Should().BeLessThanOrEqualTo(run.ActualWidth + 1, "summary text must fit the narrow sidebar");
@@ -81,12 +94,19 @@ internal static class RunInfoViewTests
                 ((TextBlock)enemyView.FindName("CurrentBossHpText")).Text.Should().Be(BossHpCell.From(boss.Hp.Single(hp => hp.Mode == "mode_single_7")).Hp);
                 ((Expander)enemyView.FindName("OtherBossHpExpander")).IsExpanded.Should().BeFalse();
                 Save((FrameworkElement)tab.Content, $"{theme}-{night}-{width}-{count}");
+                detailsToggle.IsChecked = false; Pump();
+                details.Visibility.Should().Be(Visibility.Collapsed);
+                run.ActualHeight.Should().BeLessThanOrEqualTo(50);
+                scan.IsVisible.Should().BeTrue();
+                ((Button)run.FindName("ClearHighlightsButton")).IsVisible.Should().BeTrue();
+                ((Button)run.FindName("ClearBansButton")).IsVisible.Should().BeTrue();
+                bans.SetCovenantBans(count == 0 ? [] : names); Pump();
+                detailsToggle.IsChecked.Should().BeFalse("publishing updated bans must preserve the collapsed state");
+                Save(run, $"{theme}-{night}-{width}-collapsed");
             }
 
             var manualScans = 0;
-            var enemyScans = 0;
             panel.ManualScanRequested += () => manualScans++;
-            panel.EnemyRecognitionRequested += () => enemyScans++;
             scan.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             manualScans.Should().Be(1);
             panel.UpdateManualScanStatus(2);
@@ -95,24 +115,31 @@ internal static class RunInfoViewTests
             panel.UpdateManualScanStatus(0);
             scan.IsEnabled.Should().BeTrue();
             ((TextBlock)run.FindName("ManualScanStatusText")).Visibility.Should().Be(Visibility.Collapsed);
-            ((Button)enemyView.FindName("RecognizeEnemyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            enemyScans.Should().Be(1);
+            enemyView.FindName("RecognizeEnemyButton").Should().BeNull();
+            enemyView.FindName("RecognitionStatusText").Should().BeNull();
 
             bans.SetBans([operators[0].Name]);
             bans.ToggleBan(operators[1].Name);
             operatorsVm.SetAvailableCovenants(["乌萨斯", "奥术"]);
-            menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Pump();
-            menuButton.ContextMenu.IsOpen.Should().BeTrue();
-            ((MenuItem)run.FindName("OnlyCurrentRunToggle")).IsChecked = true;
+            run.FindName("RunMenuButton").Should().BeNull();
+            var onlyCurrent = (CheckBox)((OperatorBrowseView)panel.FindName("OperatorView")).FindName("OnlyCurrentRunToggle");
+            panel.EnableCurrentRunFilters(); Pump();
+            onlyCurrent.IsChecked.Should().BeTrue();
+            panel.PlannerVm.OnlyCurrentRun.Should().BeTrue();
+            onlyCurrent.IsChecked = false;
+            operatorsVm.OnlyCurrentRun.Should().BeFalse();
+            panel.PlannerVm.OnlyCurrentRun.Should().BeTrue("the two controls remain independent when changed manually");
+            panel.EnableCurrentRunFilters(); Pump();
             operatorsVm.OnlyCurrentRun.Should().BeTrue();
-            ((MenuItem)run.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ((Button)run.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEquivalentTo([operators[1].Name]);
             bans.BannedCovenants.Should().BeEmpty();
             operatorsVm.HasRunInfo.Should().BeFalse();
             portraits.Items.Cast<Operator>().Select(o => o.Name).Should().Equal(operators[1].Name);
-            ((MenuItem)run.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            onlyCurrent.IsChecked.Should().BeFalse();
+            panel.PlannerVm.OnlyCurrentRun.Should().BeFalse();
+            ((Button)run.FindName("ClearBansButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump();
             bans.BannedNames.Should().BeEmpty();
             portraits.Items.Cast<Operator>().Should().BeEmpty();
@@ -120,7 +147,6 @@ internal static class RunInfoViewTests
         }
         finally
         {
-            menuButton.ContextMenu.IsOpen = false;
             User32.UnregisterHotKey(new System.Windows.Interop.WindowInteropHelper(panel).Handle, 0x4153);
             panel.Close();
             Directory.Delete(folder, true);

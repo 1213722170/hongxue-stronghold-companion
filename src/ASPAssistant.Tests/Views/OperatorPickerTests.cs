@@ -42,6 +42,8 @@ internal static class OperatorPickerTests
                     content.UpdateLayout();
                     var scroll = Descendants<ScrollViewer>(list).First();
                     var index = list.Items.Cast<Operator>().ToList().FindIndex(op => op.Name == name);
+                    list.ScrollIntoView(list.Items[index]);
+                    Pump();
                     var row = (ListBoxItem)list.ItemContainerGenerator.ContainerFromIndex(index);
                     row.BringIntoView();
                     Pump();
@@ -57,8 +59,7 @@ internal static class OperatorPickerTests
                     scroll.ScrollToVerticalOffset(pressedOffset + row.ActualHeight + row.Margin.Top + row.Margin.Bottom);
                     Pump();
                     hit = VisualTreeHelper.HitTest(list, point).VisualHit;
-                    var columns = Descendants<UniformGrid>(list).Single().Columns;
-                    ((Operator)((ListBoxItem)ItemsControl.ContainerFromElement(list, hit)).Content).Name.Should().Be(((Operator)list.Items[index + columns]).Name,
+                    ((Operator)((ListBoxItem)ItemsControl.ContainerFromElement(list, hit)).Content).Name.Should().Be(((Operator)list.Items[index + 2]).Name,
                         "the same screen point now hits the following grid row after scrolling");
                     RaiseMouse((UIElement)hit, Mouse.MouseUpEvent);
                     picker.Result.Should().Be(name, "scrolling between press and release must preserve the clicked operator");

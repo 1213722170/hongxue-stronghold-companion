@@ -1,4 +1,4 @@
-﻿// Modified for ASP Assistant Regulation on 2026-11-13; see NOTICE.
+// Modified for ASP Assistant Regulation on 2026-11-13; see NOTICE.
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -10,17 +10,10 @@ namespace ASPAssistant.Core.ViewModels;
 public partial class EnemyViewModel : ObservableObject
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanRecognize))]
     private bool _isRecognizing;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanRecognize))]
-    private bool _isBanAnalysisRunning;
-
-    public bool CanRecognize => !IsRecognizing && !IsBanAnalysisRunning;
-
-    [ObservableProperty]
-    private string _recognitionStatus = "请先将游戏置前并打开本局信息页，再点击识别。";
+    private string _recognitionStatus = "等待录入本局敌人信息。";
 
     public bool HasRecordedResult { get; private set; }
 

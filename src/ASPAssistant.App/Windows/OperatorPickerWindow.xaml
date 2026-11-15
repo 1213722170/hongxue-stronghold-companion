@@ -135,9 +135,10 @@
                     <Grid>
                         <ListBox x:Name="OperatorsList" ItemsSource="{Binding FilteredOperators}" Background="Transparent" BorderThickness="0"
                                  Foreground="{DynamicResource TextPrimaryBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                  PreviewMouseLeftButtonDown="OnOperatorMouseDown" MouseLeftButtonUp="OnOperatorClick" PreviewKeyDown="OnOperatorKeyDown">
                             <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Columns="2" VerticalAlignment="Top" /></ItemsPanelTemplate>
+                                <ItemsPanelTemplate><controls:OperatorPickerPanel /></ItemsPanelTemplate>
                             </ListBox.ItemsPanel>
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem" BasedOn="{StaticResource ClickableListBoxItemBase}">

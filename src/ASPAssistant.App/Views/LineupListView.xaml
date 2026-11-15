@@ -318,9 +318,10 @@
         <WrapPanel DockPanel.Dock="Top" Margin="10,0,10,4">
         <ListBox x:Name="AvailabilityFilterList" HorizontalAlignment="Left" Margin="0,0,8,4"
                  Style="{StaticResource SegmentedListBox}" SelectedValuePath="Tag" SelectedValue="{Binding SelectedAvailabilityFilter}">
-            <ListBoxItem Content="全部" Tag="{x:Static viewModels:AvailabilityFilter.All}" />
-            <ListBoxItem Content="本局可用" Tag="{x:Static viewModels:AvailabilityFilter.Available}" />
-            <ListBoxItem Content="不可用" Tag="{x:Static viewModels:AvailabilityFilter.Unavailable}" />
+            <ListBoxItem Content="全部" Tag="{x:Static viewModels:LineupAvailabilityFilter.All}" />
+            <ListBoxItem Content="本局可用" Tag="{x:Static viewModels:LineupAvailabilityFilter.Available}" IsEnabled="{Binding HasRunInfo}" />
+            <ListBoxItem Content="待确认" Tag="{x:Static viewModels:LineupAvailabilityFilter.Pending}" IsEnabled="{Binding HasRunInfo}" />
+            <ListBoxItem Content="不可用" Tag="{x:Static viewModels:LineupAvailabilityFilter.Unavailable}" IsEnabled="{Binding HasRunInfo}" />
         </ListBox>
             <Button x:Name="ClearHighlightsButton" Content="清除高亮" Click="OnClearHighlights" Margin="0,0,0,4"
                     ToolTip="取消阵容卡片高亮，保留追踪目标和来源关联">
@@ -398,12 +399,35 @@
                             Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}">
                         <StackPanel>
                             <DockPanel>
-                                <Button x:Name="RecommendMore" DockPanel.Dock="Right" Style="{StaticResource TextLink}" VerticalAlignment="Center"
-                                        Click="OnToggleAllRecommendations" />
-                                <TextBlock Text="本局推荐" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <StackPanel DockPanel.Dock="Right" Visibility="{Binding IsChecked, ElementName=RecommendDetailsToggle, Converter={StaticResource BoolToVis}}">
+                                    <Button x:Name="RecommendMore" Style="{StaticResource TextLink}" VerticalAlignment="Center"
+                                            Click="OnToggleAllRecommendations" />
+                                </StackPanel>
+                                <ToggleButton x:Name="RecommendDetailsToggle" DockPanel.Dock="Left" IsChecked="True" Width="16" Height="24" Margin="0,0,3,0"
+                                              Foreground="{DynamicResource TextPrimaryBrush}" ToolTip="展开 / 收起本局推荐"
+                                              AutomationProperties.Name="展开或收起本局推荐">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="Transparent">
+                                                <Path x:Name="Arrow" Data="M 3 2 L 7 6 L 11 2" Width="8" Height="5" Stretch="Fill"
+                                                      Stroke="{TemplateBinding Foreground}" StrokeThickness="1.4" HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform><RotateTransform Angle="-90" /></Path.RenderTransform>
+                                                </Path>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="Arrow" Property="RenderTransform"><Setter.Value><RotateTransform Angle="0" /></Setter.Value></Setter>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <TextBlock Text="本局推荐" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
                                 <TextBlock x:Name="RecommendMeta" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextSecondaryBrush}" />
                             </DockPanel>
+                            <StackPanel x:Name="RecommendDetails" Visibility="{Binding IsChecked, ElementName=RecommendDetailsToggle, Converter={StaticResource BoolToVis}}">
                             <Border x:Name="BannedStrip" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
                                 <StackPanel>
                                     <TextBlock Text="本局禁用" FontSize="10" Margin="0,0,0,4" Foreground="{DynamicResource TextSecondaryBrush}" />
@@ -428,13 +452,11 @@
                                     </ItemsControl>
                                 </StackPanel>
                             </Border>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
-                    <ItemsControl x:Name="RecommendItems" ItemTemplate="{StaticResource LineupCardTemplate}" Focusable="False" />
-                    <DockPanel Margin="0,4,0,10">
-                        <TextBlock Text="全部阵容" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                        <Border Height="1" Margin="8,0,0,0" VerticalAlignment="Center" Background="{DynamicResource LineBrush}" />
-                    </DockPanel>
+                    <ItemsControl x:Name="RecommendItems" ItemTemplate="{StaticResource LineupCardTemplate}" Focusable="False"
+                                  Visibility="{Binding IsChecked, ElementName=RecommendDetailsToggle, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
 
                 <!-- Count · 导入 · 新建 -->

@@ -26,6 +26,7 @@ public sealed record ShopEconomy(int? Round, int? Money, int? UpgradeCost, bool 
 /// </summary>
 public sealed class ShopEconomyReader(IOcrEngine ocr)
 {
+    private double _hudScale;
     // 1080p at UI size 90: 升级 text top is 101 px above the bottom edge; badges are 38 px tall, 273 px up.
     private const double ButtonFromBottom = 101;
     private const double BadgeFromBottom = 273;
@@ -47,6 +48,7 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
         // UI size 90 → 1.0, 100 → 10/9. OCR boxes wobble by a few pixels, so small deviations count as 90.
         double ratio = button is null ? 1 : (height - button.Box.Y) / (ButtonFromBottom * s);
         double k = s * (ratio < 1.04 ? 1 : Math.Min(ratio, 10.0 / 9));
+        _hudScale = k;
         bool maxed = button?.Text.Contains("满级", StringComparison.Ordinal) == true;
 
         int? cost = null;
@@ -58,6 +60,17 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
         // Skip the coin icon at the badge's left; it pulls the recogniser towards letters.
         var money = await ReadBadgeAsync(png, width - (int)(120 * k), height, k, (int)(48 * k));
         return new(round, money, cost, maxed, mode, preparation);
+    }
+
+    /// <summary>Rechecks only funds while the same shop layout remains open.</summary>
+    public Task<int?> ReadMoneyAsync(byte[] png, int width, int height)
+        => ReadBadgeAsync(png, width - (int)(120 * _hudScale), height, _hudScale, (int)(48 * _hudScale));
+
+    /// <summary>Fresh round, preparation phase and funds for a pending purchase; reuse the measured HUD scale.</summary>
+    public async Task<ShopEconomy> ReadPurchaseAsync(byte[] png, int width, int height, ShopEconomy previous)
+    {
+        var (round, mode, preparation) = await ReadTopAsync(png, width, height, Math.Min(width / 1920.0, height / 1080.0));
+        return previous with { Round = round, Mode = mode, IsPreparation = preparation, Money = await ReadMoneyAsync(png, width, height) };
     }
 
     /// <summary>
@@ -72,7 +85,10 @@ public sealed class ShopEconomyReader(IOcrEngine ocr)
         {
             int y = (int)(height - (BadgeFromBottom + dy) * k);
             if (Number(await ocr.RecognizeLineAsync(png, x + (int)(dx * k), y, w + (int)(grow * k), (int)(BadgeHeight * k))) is { } n)
+            {
                 votes.Add(n);
+                if (votes.Count(v => v == n) == 3) return n; // Three votes cannot be outvoted by the remaining two crops.
+            }
         }
         var best = votes.GroupBy(v => v).OrderByDescending(g => g.Count()).FirstOrDefault();
         return best is not null && best.Count() >= 2 && best.Count() * 2 > votes.Count ? best.Key : null;

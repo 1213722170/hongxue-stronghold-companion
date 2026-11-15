@@ -29,6 +29,58 @@ namespace ASPAssistant.Tests.Views;
 [Collection("Update environment")]
 public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
 {
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task StrategySupportSearch_AcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => StrategySupportSearchViewTests.Verify(theme, night), $"StrategySupportSearch-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task AutomaticPurchases_ExperimentalSettingAcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => ExperimentalPurchaseViewTests.Verify(theme, night), $"AutomaticPurchases-{theme}-{night}");
+
+    [Fact]
+    public Task EmulatorFix_PickerScopeAndExcludedPools() => ui.RunAsync(EmulatorFixViewTests.VerifyPicker, nameof(EmulatorFix_PickerScopeAndExcludedPools));
+
+    [Fact]
+    public Task EmulatorFix_OwnedDialogTopmostAndMoveSnap() => ui.RunAsync(EmulatorFixViewTests.VerifyPanel, nameof(EmulatorFix_OwnedDialogTopmostAndMoveSnap));
+
+    [Fact]
+    public Task EmulatorFix_ConnectionLayoutAcrossThemes() => ui.RunAsync(EmulatorFixViewTests.VerifyConnectionLayout, nameof(EmulatorFix_ConnectionLayoutAcrossThemes));
+
+    [Fact]
+    public Task RecognizedEquipment_ShowsAcquiredInShoppingListAndReloads() => ui.RunAsync(EmulatorFixViewTests.VerifyEquipmentPurchase, nameof(RecognizedEquipment_ShowsAcquiredInShoppingListAndReloads));
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task OperatorPicker_InteractionAcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => OperatorPickerPerformanceViewTests.VerifyInteraction(theme, night), $"OperatorPicker-Interaction-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task OperatorPicker_VirtualizesTwoColumns(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => OperatorPickerPerformanceViewTests.VerifyVirtualization(theme, night), $"OperatorPicker-Virtualization-{theme}-{night}");
+
     [Fact]
     public async Task UiFailure_ClosesWindowsAndRestoresTheme()
     {
@@ -343,6 +395,16 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [InlineData(GameShopTheme.Ursus, true)]
     [InlineData(GameShopTheme.Closure, false)]
     [InlineData(GameShopTheme.Closure, true)]
+    public Task LineupStates_FilterAndShowPendingRecommendations(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => LineupStateFilterViewTests.Verify(theme, night), $"{nameof(LineupStates_FilterAndShowPendingRecommendations)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
     public Task EditorRedesign_PickersAndCovenantIcons(GameShopTheme theme, bool night)
         => ui.RunAsync(() => EditorRedesignViewTests.Verify(theme, night), $"{nameof(EditorRedesign_PickersAndCovenantIcons)}-{theme}-{night}");
 
@@ -367,6 +429,56 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
 
     [Fact]
     public Task Tracking_EquipmentAndGroups() => ui.RunAsync(TrackingWorkflowViewTests.VerifyEquipmentAndGroups, nameof(Tracking_EquipmentAndGroups));
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task EquipmentCompletion_KeepsEquipmentAcrossReload(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => EquipmentCompletionViewTests.Verify(theme, night), $"{nameof(EquipmentCompletion_KeepsEquipmentAcrossReload)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task OperatorCatalogue_ShowsSupportAndSelectedCustom(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => OperatorCatalogueViewTests.Verify(theme, night), $"{nameof(OperatorCatalogue_ShowsSupportAndSelectedCustom)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task CoreBan_UpdatesCodexAndPreservesManualBan(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => CoreBanViewTests.Verify(theme, night), $"{nameof(CoreBan_UpdatesCodexAndPreservesManualBan)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task PlannerLockedBan_PausesAndRestoresAcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => PlannerLockedBanViewTests.Verify(theme, night), $"{nameof(PlannerLockedBan_PausesAndRestoresAcrossThemes)}-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    public Task RecognitionHotkey_SettingsAndDispatch(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => RecognitionHotkeyViewTests.Verify(theme, night), $"{nameof(RecognitionHotkey_SettingsAndDispatch)}-{theme}-{night}");
 
     [Fact]
     public Task Codex_PreservesFiltersAndNavigation() => ui.RunAsync(ClearAndLineupSourceViewTests.VerifyCodex, nameof(Codex_PreservesFiltersAndNavigation));
@@ -559,7 +671,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                     Save(view, Path.Combine(output, isLight ? "light.png" : "dark.png"));
                     Save(tooltip, Path.Combine(output, isLight ? "light-details.png" : "dark-details.png"));
 
-                    ((MenuItem)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    ((Button)runView.FindName("ClearHighlightsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
                     vm.HighlightedCovenants.Should().BeEmpty();
                     item.IsSelected.Should().BeTrue();
@@ -963,23 +1075,15 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                             }
                             if (page is EnemyView enemyView)
                             {
-                                var button = (Button)enemyView.FindName("RecognizeEnemyButton");
+                                enemyView.FindName("RecognizeEnemyButton").Should().BeNull();
+                                enemyView.FindName("RecognitionStatusText").Should().BeNull();
                                 enemyVm.BeginRecognition();
                                 content.UpdateLayout();
-                                button.IsEnabled.Should().BeFalse();
-                                ((TextBlock)enemyView.FindName("RecognitionStatusText")).Text.Should().StartWith("正在");
                                 enemyVm.Update(new("假想敌：鳍", ["特训敌人·元素", "特训敌人·致命"],
                                     ["假想敌：鳍", "特训敌人·元素", "特训敌人·致命"]),
                                     null, [new() { TypeName = "元素" }, null]);
                                 content.UpdateLayout();
-                                button.IsEnabled.Should().BeTrue();
                                 Descendants<TextBlock>(enemyView).Should().Contain(t => t.Text.Contains("致命：资料未收录"));
-                                int requested = 0;
-                                Action onRequest = () => requested++;
-                                sidePanel.EnemyRecognitionRequested += onRequest;
-                                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                                requested.Should().Be(1);
-                                sidePanel.EnemyRecognitionRequested -= onRequest;
                             }
                             if (page is EquipmentBrowseView equipmentView)
                             {
