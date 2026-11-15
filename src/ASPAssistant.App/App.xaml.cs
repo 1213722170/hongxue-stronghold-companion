@@ -669,8 +669,8 @@ public partial class App : Application
         {
             Dispatcher.Invoke(() =>
             {
-                trackingVm.IsTerminalLevelRestored = false;
                 trackingVm.DetectedTerminalLevel = level;
+                trackingVm.IsTerminalLevelRestored = false;
             });
             _ = _settingsManager!.SaveTerminalLevelAsync(level);
         };
@@ -716,10 +716,14 @@ public partial class App : Application
             await SaveTrackingAsync();
         };
         trackingVm.SourcesChanged += async () => await SaveTrackingAsync();
+        trackingVm.UpgradeReminderStateChanged += async () => await SaveTrackingAsync();
+        trackingVm.UpgradeReminderRequested += reminder => sidePanel.ShowToast($"{reminder.Title} · {reminder.RangeText}");
 
         // Show windows and start services
         MainWindow = _sidePanel;
         _sidePanel.Show();
+        if (_settingsManager.DeployPoolRecoveryNotice is { } recoveryNotice)
+            ConfirmDialog.Tell(_sidePanel, "已恢复干员拥有状态", recoveryNotice);
         _overlay.Show();
         _assistantTray = new AssistantTray(_sidePanel, _overlay);
         _assistantTray.VisibilityChanged += () =>

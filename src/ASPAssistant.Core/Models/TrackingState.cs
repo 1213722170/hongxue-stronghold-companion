@@ -5,9 +5,15 @@ public sealed class TrackingState
 {
     public List<TrackingEntry> Entries { get; set; } = [];
     public List<TrackedLineup> Lineups { get; set; } = [];
+    public string? UpgradeReminderLineupId { get; set; }
+    public List<UpgradeReminderProgress> UpgradeReminderProgress { get; set; } = [];
 }
 
-public sealed record TrackedLineup(string Id, string Name, bool Highlighted = true);
+public sealed record TrackedLineup(string Id, string Name, bool Highlighted = true)
+{
+    public List<TerminalUpgradeReminder> UpgradeReminders { get; init; } = [];
+    public bool UpgradeNotificationsEnabled { get; init; }
+}
 
 /// <summary>An empty LineupId records an independent target; older unassociated targets remain independent.</summary>
 public sealed record TrackingOrigin

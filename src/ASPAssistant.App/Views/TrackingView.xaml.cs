@@ -32,6 +32,7 @@ public partial class TrackingView : UserControl
     private INotifyCollectionChanged? _operators;
     private INotifyCollectionChanged? _equipment;
     private CovenantCalculator? _calculator;
+    private bool _updatingUpgradeSource;
     public static readonly DependencyProperty EquipmentRulesProperty = DependencyProperty.Register(
         nameof(EquipmentRules), typeof(LineupEquipmentService), typeof(TrackingView));
     public LineupEquipmentService EquipmentRules => (LineupEquipmentService)GetValue(EquipmentRulesProperty);
@@ -70,6 +71,9 @@ public partial class TrackingView : UserControl
         else if (e.PropertyName is nameof(TrackingViewModel.TerminalLevel) or nameof(TrackingViewModel.TerminalLevelText)
                  or nameof(TrackingViewModel.OperatorProgress) or nameof(TrackingViewModel.Economy))
             RefreshSummary();
+        else if (e.PropertyName is nameof(TrackingViewModel.UpgradeReminder) or nameof(TrackingViewModel.UpgradeReminderSources)
+                 or nameof(TrackingViewModel.UpgradeReminderLineupId))
+            RefreshUpgradeReminder();
     }
 
     private void HookCollections()
@@ -150,6 +154,52 @@ public partial class TrackingView : UserControl
         EconomyMoney.Text = economy?.Money?.ToString() ?? "–";
         EconomyCost.Text = economy is { UpgradeMaxed: true } ? "满级" : economy?.UpgradeCost?.ToString() ?? "–";
         EconomyMode.Text = economy?.Mode ?? "";
+        RefreshUpgradeReminder();
+    }
+
+    private void RefreshUpgradeReminder()
+    {
+        var display = _vm?.UpgradeReminder;
+        UpgradeReminderArea.Visibility = display is null ? Visibility.Collapsed : Visibility.Visible;
+        if (display is null) return;
+        _updatingUpgradeSource = true;
+        UpgradeReminderSourceRow.Visibility = _vm!.UpgradeReminderSources.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (!ReferenceEquals(UpgradeReminderSourceBox.ItemsSource, _vm.UpgradeReminderSources))
+            UpgradeReminderSourceBox.ItemsSource = _vm.UpgradeReminderSources;
+        UpgradeReminderSourceBox.SelectedValue = _vm.UpgradeReminderLineupId;
+        _updatingUpgradeSource = false;
+        var status = display.Status;
+        bool warning = status is UpgradeReminderStatus.LastRound or UpgradeReminderStatus.Overdue;
+        bool neutral = status is UpgradeReminderStatus.Waiting or UpgradeReminderStatus.Upcoming or UpgradeReminderStatus.Ignored;
+        bool complete = status == UpgradeReminderStatus.Completed;
+        UpgradeReminderCard.SetResourceReference(Border.BackgroundProperty, warning ? "WarningTintBrush"
+            : complete ? "SuccessTintBrush" : neutral ? "SectionBackgroundBrush" : "AccentSoftBrush");
+        UpgradeReminderCard.SetResourceReference(Border.BorderBrushProperty, warning ? "WarningMutedBrush"
+            : complete ? "SuccessBorderBrush" : neutral ? "LineBrush" : "AccentBorderBrush");
+        string foreground = warning ? "WarningTextBrush" : complete ? "SuccessTextBrush" : neutral ? "TextSecondaryBrush" : "AccentBrush";
+        UpgradeReminderTitle.SetResourceReference(TextBlock.ForegroundProperty, foreground);
+        UpgradeReminderRange.SetResourceReference(TextBlock.ForegroundProperty, foreground);
+        UpgradeReminderTitle.Text = (complete ? "✓ " : neutral ? "" : "↑ ") + display.Title;
+        UpgradeReminderRange.Text = display.RangeText;
+        UpgradeReminderDetail.Text = display.Detail;
+        UpgradeReminderCard.ToolTip = _vm.UpgradeReminderSources.Single(l => l.Id == _vm.UpgradeReminderLineupId).Name
+            + "\n" + display.Title + " · " + display.Reminder?.RoundText + "\n" + display.Detail
+            + (display.Reminder is { Note.Length: > 0 } r ? "\n" + r.Note : "");
+        IgnoreUpgradeReminderButton.Visibility = display.Reminder is not null || status == UpgradeReminderStatus.Ignored
+            ? Visibility.Visible : Visibility.Collapsed;
+        IgnoreUpgradeReminderButton.Content = status == UpgradeReminderStatus.Ignored ? "恢复提醒" : "本局忽略";
+    }
+
+    private void OnUpgradeReminderSourceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_updatingUpgradeSource && _vm is not null && UpgradeReminderSourceBox.SelectedValue is string id)
+            _vm.UpgradeReminderLineupId = id;
+    }
+
+    private void OnIgnoreUpgradeReminder(object sender, RoutedEventArgs e)
+    {
+        if (_vm?.UpgradeReminder?.Status == UpgradeReminderStatus.Ignored) _vm.RestoreUpgradeReminders();
+        else _vm?.IgnoreUpgradeReminder();
     }
 
     private static void Fill(FrameworkElement section, ItemsControl list, TextBlock count, IReadOnlyList<TrackedCell> cells)

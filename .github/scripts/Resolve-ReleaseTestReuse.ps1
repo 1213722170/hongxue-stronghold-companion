@@ -46,7 +46,7 @@ try {
     finally { $archive.Dispose() }
     if ($proof.schema -ne 1 -or $proof.repository -ne $repository -or $proof.sha -ne $sha -or
         [string]$proof.runId -ne [string]$run.id -or [int]$proof.runAttempt -ne [int]$run.run_attempt -or
-        $proof.suite -ne 'public-windows-dotnet-v1' -or $proof.runnerOS -ne 'Windows') {
+        $proof.suite -ne 'public-windows-dotnet-python-v2' -or $proof.runnerOS -ne 'Windows') {
         Write-Output 'Evidence does not describe this exact commit and run attempt; run the full test suite.'
         return
     }

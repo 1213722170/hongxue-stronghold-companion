@@ -21,6 +21,7 @@
 ```powershell
 dotnet restore ASPAssistant.sln
 dotnet test src/ASPAssistant.Tests/ASPAssistant.Tests.csproj -c Release --filter "Category!=LocalScreenshot"
+python -B -m unittest discover -s data/tests -p "test_*.py"
 
 # 使用独立设置目录试运行，避免影响日用阵容和追踪记录。
 $env:ASPASSISTANT_SETTINGS_DIR = Join-Path $env:TEMP 'hongxue-companion-dev-settings'
@@ -30,6 +31,8 @@ dotnet run --project src/ASPAssistant.App
 上述环境变量仅作用于当前终端及其子进程。请手动退出已运行的日用助手再试运行开发版，不要通过测试脚本强行停止用户进程。
 
 `LocalScreenshot` 测试依赖未公开的本地游戏截图，公开 CI 使用上述筛选条件。请勿为了通过测试而删除断言或提交这些截图；修改相关识别逻辑时，在 PR 中说明已有样本验证及尚未实测的情况。
+
+数据测试使用 Python 3 标准库，无需安装额外包。PR 验证同时运行 .NET 与数据测试；发布仅复用包含这两部分的同提交成功证据，否则重新运行两部分。
 
 ## 修改与验证
 

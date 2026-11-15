@@ -19,6 +19,8 @@ public partial class LineupEditorViewModel : ObservableObject
     private readonly CovenantCalculator _calculator;
     private readonly string _initialName;
     private readonly List<TargetCovenant> _initialTargets;
+    private readonly List<TerminalUpgradeReminder> _initialUpgradeReminders;
+    private readonly bool _initialUpgradeNotificationsEnabled;
     private readonly Dictionary<LineupPhase, List<LineupSlot>> _initialSlots;
     private readonly Dictionary<LineupPhase, ObservableCollection<LineupSlot>> _phaseSlots = [];
     private readonly LineupPhase _initialPhase;
@@ -38,6 +40,8 @@ public partial class LineupEditorViewModel : ObservableObject
     {
         get
         {
+            var reminderError = TerminalUpgradeReminder.ValidationError(UpgradeReminders);
+            if (reminderError.Length > 0) return reminderError;
             foreach (var (phase, slots) in _phaseSlots)
                 foreach (var slot in slots.Where(s => s.OperatorName.Length > 0))
                 {
@@ -60,9 +64,13 @@ public partial class LineupEditorViewModel : ObservableObject
 
     public string LineupId { get; }
     public string? SourceUrl { get; }
+    public string? SourceContentHash { get; set; }
 
     [ObservableProperty]
     private string _name = "新阵容";
+
+    [ObservableProperty]
+    private bool _upgradeNotificationsEnabled;
 
     /// <summary>9 个槽位，空槽位的 OperatorName 为空字符串。</summary>
     [ObservableProperty]
@@ -90,6 +98,7 @@ public partial class LineupEditorViewModel : ObservableObject
 
         LineupId = source?.Id ?? Guid.NewGuid().ToString("N");
         SourceUrl = source?.SourceUrl;
+        SourceContentHash = source?.SourceContentHash;
         if (!string.IsNullOrWhiteSpace(source?.Name))
             _name = source!.Name;
 
@@ -126,6 +135,9 @@ public partial class LineupEditorViewModel : ObservableObject
             ? source.TargetCovenants.Select(t => t.Clone())
             : LineupTargets.Derive(new Lineup { Slots = ExportPhase(LineupPhase.后期) }, calculator)];
         _initialTargets = [.. TargetCovenants.Select(t => t.Clone())];
+        UpgradeReminders = [.. source?.UpgradeReminders ?? []];
+        _initialUpgradeReminders = [.. UpgradeReminders];
+        _upgradeNotificationsEnabled = _initialUpgradeNotificationsEnabled = source?.UpgradeNotificationsEnabled ?? false;
         SelectPhase(_initialPhase);
     }
 
@@ -133,6 +145,7 @@ public partial class LineupEditorViewModel : ObservableObject
 
     /// <summary>What this lineup is built to reach (core first); 本局推荐 and the 筛选 work from these.</summary>
     public List<TargetCovenant> TargetCovenants { get; private set; }
+    public List<TerminalUpgradeReminder> UpgradeReminders { get; private set; }
 
     /// <summary>Each target against the current late-game slots: 已满足 or how many people are missing.</summary>
     public IReadOnlyList<TargetState> TargetStates => TargetCovenants.Count == 0 ? []
@@ -417,6 +430,8 @@ public partial class LineupEditorViewModel : ObservableObject
         foreach (var (phase, slots) in _initialSlots)
             _phaseSlots[phase] = new ObservableCollection<LineupSlot>(slots.Select(CloneSlot));
         TargetCovenants = [.. _initialTargets.Select(t => t.Clone())];
+        UpgradeReminders = [.. _initialUpgradeReminders];
+        UpgradeNotificationsEnabled = _initialUpgradeNotificationsEnabled;
         SelectPhase(_initialPhase);
     }
 
@@ -499,6 +514,7 @@ public partial class LineupEditorViewModel : ObservableObject
     {
         Id = LineupId,
         SourceUrl = SourceUrl,
+        SourceContentHash = SourceContentHash,
         Name = string.IsNullOrWhiteSpace(Name) ? "未命名阵容" : Name.Trim(),
         Slots = ExportPhase(LineupPhase.后期),
         EarlySlots = ExportPhase(LineupPhase.前期),
@@ -507,6 +523,8 @@ public partial class LineupEditorViewModel : ObservableObject
         Strategies = [.. StrategySlots.Where(s => s.StrategyId.Length > 0)
             .Select(s => new LineupStrategySlot { StrategyId = s.StrategyId, Tags = [.. s.Tags] })],
         TargetCovenants = [.. TargetCovenants.Select(t => t.Clone())],
+        UpgradeReminders = [.. UpgradeReminders.OrderBy(r => r.TargetLevel)],
+        UpgradeNotificationsEnabled = UpgradeNotificationsEnabled,
         UpdatedAt = DateTime.UtcNow,
     };
 

@@ -14,7 +14,11 @@ public partial class TrackingViewModel : ObservableObject
     public bool IsLineupTracked(string id) => _trackedLineups.Any(l => l.Id == id);
     public event Action? SourcesChanged;
 
-    public TrackingState CaptureState() => new() { Entries = [.. AllEntries], Lineups = [.. _trackedLineups] };
+    public TrackingState CaptureState() => new()
+    {
+        Entries = [.. AllEntries], Lineups = [.. _trackedLineups],
+        UpgradeReminderLineupId = _upgradeReminderLineupId, UpgradeReminderProgress = [.. _upgradeProgress.Values]
+    };
 
     public void ClearLineupHighlights()
     {
@@ -25,7 +29,8 @@ public partial class TrackingViewModel : ObservableObject
     private void NotifySourcesChanged()
     {
         var ids = TrackedOperators.SelectMany(e => e.Origins).Select(o => o.LineupId).ToHashSet();
-        _trackedLineups.RemoveAll(l => !ids.Contains(l.Id));
+        _trackedLineups.RemoveAll(l => !ids.Contains(l.Id) && l.UpgradeReminders.Count == 0);
+        RefreshUpgradeReminderSources();
         OnPropertyChanged(nameof(TrackedLineupIds));
         SourcesChanged?.Invoke();
     }
@@ -127,8 +132,13 @@ public partial class TrackingViewModel : ObservableObject
         // done its job and automatic tracking takes over again (otherwise it would pin the level for the whole run).
         if (ManualTerminalLevel is { } manual && value >= manual) ManualTerminalLevel = null;
         RefreshExpiry();
+        RefreshUpgradeReminder();
     }
-    partial void OnManualTerminalLevelChanged(int? value) => RefreshExpiry();
+    partial void OnManualTerminalLevelChanged(int? value)
+    {
+        RefreshExpiry();
+        RefreshUpgradeReminder();
+    }
 
     /// <summary>New run: forget the level read in the previous one.</summary>
     public void ResetTerminalLevel()
@@ -140,6 +150,8 @@ public partial class TrackingViewModel : ObservableObject
 
     public void StartNewRun()
     {
+        Economy = null;
+        _upgradeProgress.Clear();
         if (_deployPool is not null)
         {
             _deployPool.Owned.Clear();
@@ -156,6 +168,8 @@ public partial class TrackingViewModel : ObservableObject
         }
         RefreshEquipmentRequirements();
         SyncDeployPool();
+        RefreshUpgradeReminder();
+        UpgradeReminderStateChanged?.Invoke();
     }
 
     /// <summary>Marks 过渡 entries whose stages are behind the current terminal level (replaced so lists and saves refresh).</summary>
@@ -202,8 +216,15 @@ public partial class TrackingViewModel : ObservableObject
             if (remaining.Count == 0) TrackedOperators.Remove(existing);
             else TrackedOperators[TrackedOperators.IndexOf(existing)] = MergeOrigins(existing, remaining);
         }
+        var previousReminders = _trackedLineups.FirstOrDefault(l => l.Id == lineup.Id)?.UpgradeReminders;
+        foreach (var key in _upgradeProgress.Keys.Where(k => k.LineupId == lineup.Id
+                     && !lineup.UpgradeReminders.Any(r => r.TargetLevel == k.Level && previousReminders?.Contains(r) == true)).ToList())
+            _upgradeProgress.Remove(key);
         _trackedLineups.RemoveAll(l => l.Id == lineup.Id);
-        _trackedLineups.Add(new TrackedLineup(lineup.Id, lineup.Name, highlight));
+        _trackedLineups.Add(new TrackedLineup(lineup.Id, lineup.Name, highlight)
+        {
+            UpgradeReminders = [.. lineup.UpgradeReminders], UpgradeNotificationsEnabled = lineup.UpgradeNotificationsEnabled
+        });
         var phases = new[] { (Slots: lineup.Slots, Phase: "后期"), (Slots: lineup.MidSlots, Phase: "中期"),
             (Slots: lineup.EarlySlots, Phase: "前期"), (Slots: lineup.SupportSlots, Phase: "挂件") };
         foreach (var group in phases.SelectMany(p => p.Slots.Select(slot => (Slot: slot, p.Phase)))
@@ -489,11 +510,16 @@ public partial class TrackingViewModel : ObservableObject
     {
         LoadEntries(state.Entries);
         _trackedLineups = state.Lineups.ToList();
+        _upgradeReminderLineupId = state.UpgradeReminderLineupId;
+        foreach (var progress in state.UpgradeReminderProgress)
+            _upgradeProgress[(progress.LineupId, progress.TargetLevel)] = progress;
         NotifySourcesChanged();
     }
 
     public void LoadEntries(List<TrackingEntry> entries)
     {
+        _upgradeProgress.Clear();
+        _upgradeReminderLineupId = null;
         _trackedLineups.Clear();
         TrackedOperators.Clear();
         TrackedEquipment.Clear();

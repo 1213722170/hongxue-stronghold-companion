@@ -46,15 +46,21 @@ public class LineupShareService
         }
     }
 
-    /// <summary>返回阵容短链接；相同内容在首次生成后的 30 天内复用本地记录。</summary>
+    public static string ContentFingerprint(Lineup lineup) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        lineup.Name, lineup.Slots, lineup.EarlySlots, lineup.MidSlots, lineup.SupportSlots, lineup.Strategies, lineup.SourceUrl,
+        TargetCovenants = lineup.TargetCovenants.Count > 0 ? lineup.TargetCovenants : null,
+        UpgradeReminders = lineup.UpgradeReminders.Count > 0 ? lineup.UpgradeReminders : null,
+        UpgradeNotificationsEnabled = lineup.UpgradeNotificationsEnabled ? (bool?)true : null
+    }, JsonOptions)));
+
+    /// <summary>森空岛导入后未修改的阵容返回原攻略链接；其他阵容生成短链接，同内容30天内复用。</summary>
     public async Task<string> ExportAsync(Lineup lineup, CancellationToken ct = default)
     {
+        var fingerprint = ContentFingerprint(lineup);
+        if (lineup.SourceUrl is { } source && SklandGuideImporter.IsOfficialGuideUrl(source)
+            && lineup.SourceContentHash == fingerprint) return source.Trim();
         var json = JsonSerializer.Serialize(lineup, JsonOptions);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            lineup.Name, lineup.Slots, lineup.EarlySlots, lineup.MidSlots, lineup.SupportSlots, lineup.Strategies, lineup.SourceUrl,
-            TargetCovenants = lineup.TargetCovenants.Count > 0 ? lineup.TargetCovenants : null
-        }, JsonOptions)));
 
         await _exportGate.WaitAsync(ct);
         try
@@ -143,6 +149,8 @@ public class LineupShareService
 
         var lineup = JsonSerializer.Deserialize<Lineup>(json, JsonOptions)
                      ?? throw new InvalidOperationException("无法解析阵容 JSON");
+        if (TerminalUpgradeReminder.ValidationError(lineup.UpgradeReminders) is { Length: > 0 } error)
+            throw new InvalidDataException(error);
         if (string.IsNullOrEmpty(lineup.Id))
             lineup.Id = Guid.NewGuid().ToString("N");
         _equipmentRules.Upgrade(lineup);

@@ -32,7 +32,7 @@ try {
     $cases = @('valid', 'no-run', 'latest-failed', 'running', 'wrong-head', 'wrong-workflow',
         'wrong-event', 'job-failed', 'no-artifact', 'expired', 'old-attempt-artifact',
         'wrong-sha', 'wrong-repository', 'wrong-run', 'wrong-attempt', 'wrong-suite',
-        'wrong-os', 'invalid-json', 'invalid-zip', 'network-error')
+        'old-dotnet-suite', 'wrong-os', 'invalid-json', 'invalid-zip', 'network-error')
     foreach ($case in $cases) {
         $mockResponses.networkFailure = $false
         $run = @{ id = 100; run_attempt = 2; head_sha = $env:GITHUB_SHA;
@@ -41,7 +41,7 @@ try {
         $mockResponses.jobs = @(@{ name = 'Windows .NET tests'; conclusion = 'success' })
         $mockResponses.artifacts = @(@{ id = 200; name = 'verified-tests-2'; expired = $false; size_in_bytes = 500 })
         $proof = @{ schema = 1; repository = $env:GITHUB_REPOSITORY; sha = $env:GITHUB_SHA;
-            runId = '100'; runAttempt = 2; suite = 'public-windows-dotnet-v1'; runnerOS = 'Windows' }
+            runId = '100'; runAttempt = 2; suite = 'public-windows-dotnet-python-v2'; runnerOS = 'Windows' }
         switch ($case) {
             'no-run' { $mockResponses.runs = @() }
             'latest-failed' { $run.conclusion = 'failure'; $older = $run.Clone(); $older.id = 99; $older.conclusion = 'success'; $mockResponses.runs += $older }
@@ -58,6 +58,7 @@ try {
             'wrong-run' { $proof.runId = '99' }
             'wrong-attempt' { $proof.runAttempt = 1 }
             'wrong-suite' { $proof.suite = 'other-suite' }
+            'old-dotnet-suite' { $proof.suite = 'public-windows-dotnet-v1' }
             'wrong-os' { $proof.runnerOS = 'Linux' }
             'network-error' { $mockResponses.networkFailure = $true }
         }

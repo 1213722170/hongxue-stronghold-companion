@@ -74,6 +74,7 @@ internal static class SklandImportViewTests
                 lineups.Lineups.Should().HaveCount(count);
                 var saved = lineups.Lineups.Single(x => x.Id == draft.Id);
                 saved.SourceUrl.Should().Be(draft.SourceUrl);
+                saved.SourceContentHash.Should().Be(LineupShareService.ContentFingerprint(saved));
                 saved.Slots[0].IsElite.Should().BeTrue();
                 tracking.TrackedOperators.Should().BeEmpty();
                 tracking.TrackedEquipment.Should().BeEmpty();

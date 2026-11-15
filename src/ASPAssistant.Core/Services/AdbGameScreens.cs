@@ -25,9 +25,33 @@ public static class AdbGameScreens
     }
 
     public static IReadOnlyList<AdbGameDisplay> Find(GameConnectionSettings settings)
-        => Parse(Run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "activity", "activities"]),
-            Run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "display"]),
-            Run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "input"]));
+        => Find(settings, Run);
+
+    internal static IReadOnlyList<AdbGameDisplay> Find(GameConnectionSettings settings,
+        Func<string, IEnumerable<string>, string> run)
+    {
+        string activities;
+        try
+        {
+            activities = run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "activity", "activities"]);
+        }
+        catch (IOException ex) when (
+            (ex.Message.Contains($"device '{settings.AdbSerial}' not found", StringComparison.Ordinal)
+                || ex.Message.Contains("device offline", StringComparison.Ordinal))
+            && Uri.TryCreate($"tcp://{settings.AdbSerial}", UriKind.Absolute, out var endpoint)
+            && endpoint.Host.Length > 0 && endpoint.Port > 0 && endpoint.UserInfo.Length == 0
+            && endpoint.PathAndQuery is "" or "/")
+        {
+            var result = run(settings.AdbPath, ["connect", settings.AdbSerial]).Trim();
+            // adb connect can report connection refusal on stdout with exit code zero.
+            if (result != $"connected to {settings.AdbSerial}" && result != $"already connected to {settings.AdbSerial}")
+                throw new IOException($"ADB 连接失败：{result}");
+            activities = run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "activity", "activities"]);
+        }
+        return Parse(activities,
+            run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "display"]),
+            run(settings.AdbPath, ["-s", settings.AdbSerial, "shell", "dumpsys", "input"]));
+    }
 
     public static IReadOnlyList<AdbGameDisplay> Parse(string activities, string displays, string input)
     {

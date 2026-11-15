@@ -70,7 +70,7 @@ public class AppLoggerTests : IDisposable
         AppLogger.Warn("ScreenCapture", "Arknights window not found");
         AppLogger.SaveArtifact("exited", [4, 5], ".png").Should().BeNull();
         File.ReadAllText(LogPath).Should().Be(activeText);
-        Directory.GetFiles(_directory).Should().HaveCount(2);
+        Directory.GetFiles(_directory, "*", SearchOption.AllDirectories).Should().HaveCount(2);
 
         present = true;
         AppLogger.Info("ShopScan", "game restarted");
@@ -88,6 +88,41 @@ public class AppLoggerTests : IDisposable
         var text = File.ReadAllText(LogPath);
         text.Should().Contain("[ERROR] [App] critical failure");
         text.Should().Contain("[ERROR] [OcrScanner] scan failed: System.InvalidOperationException: test exception details");
+    }
+
+    [Fact]
+    public void CapturesAreUniqueAndBoundedWithoutDeletingLegacyOrUnrelatedFiles()
+    {
+        var legacy = Path.Combine(_directory, "ban-attempt-010203004.png");
+        File.WriteAllText(legacy, "legacy evidence");
+        var captures = Enumerable.Range(0, 60).Select(_ => AppLogger.SaveArtifact("ban-attempt", [1, 2, 3], ".png")).ToArray();
+        captures.Should().NotContainNulls().And.OnlyHaveUniqueItems();
+        Directory.GetFiles(Path.Combine(_directory, "diagnostics"), "aspa-artifact-*").Should().HaveCount(50);
+        File.Exists(captures[^1]).Should().BeTrue();
+        File.ReadAllText(legacy).Should().Be("legacy evidence");
+
+        var stale = captures[^1]!;
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-8));
+        var unrelated = Path.Combine(_directory, "diagnostics", "manual.png");
+        File.WriteAllText(unrelated, "manual evidence");
+        File.SetLastWriteTimeUtc(unrelated, DateTime.UtcNow.AddDays(-8));
+        AppLogger.Initialize(_directory);
+        File.Exists(stale).Should().BeFalse();
+        File.ReadAllText(unrelated).Should().Be("manual evidence");
+    }
+
+    [Fact]
+    public void LockedOldLogDoesNotDisableNewLogging()
+    {
+        var old = Path.Combine(_directory, "aspa-2000-01-01.log");
+        File.WriteAllText(old, "locked evidence");
+        File.SetLastWriteTime(old, DateTime.Now.AddDays(-8));
+        using var held = new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.Read);
+        _pathField.SetValue(null, null);
+        AppLogger.Initialize(_directory);
+        AppLogger.Info("Test", "logging remains available");
+        File.ReadAllText((string)_pathField.GetValue(null)!).Should().Contain("logging remains available");
+        File.Exists(old).Should().BeTrue();
     }
 
     [Fact]

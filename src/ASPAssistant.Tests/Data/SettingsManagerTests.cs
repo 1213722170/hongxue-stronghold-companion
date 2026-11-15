@@ -7,6 +7,90 @@ namespace ASPAssistant.Tests.Data;
 
 public class SettingsManagerTests : IDisposable
 {
+    [Theory]
+    [InlineData("{\"owned\":")]
+    [InlineData("null")]
+    [InlineData("{\"owned\":null}")]
+    [InlineData("{\"counts\":{\"角峰\":-1}}")]
+    public async Task DamagedDeployPoolRestoresValidatedBackupAndPreservesOriginal(string damaged)
+    {
+        var path = Path.Combine(_tempDir, "deploy-pool.json");
+        await _manager.SaveDeployPoolAsync(new() { Owned = ["角峰"], Elite = ["角峰"], Counts = new() { ["角峰"] = 2 } });
+        var backup = await File.ReadAllTextAsync(path);
+        File.Copy(path, path + ".bak");
+        await File.WriteAllTextAsync(path, damaged);
+
+        var recovered = await _manager.LoadDeployPoolAsync();
+
+        recovered.Owned.Should().Equal("角峰");
+        recovered.Elite.Should().Equal("角峰");
+        recovered.CountOf("角峰").Should().Be(2);
+        File.ReadAllText(path).Should().Be(backup);
+        File.ReadAllText(path + ".bak").Should().Be(backup);
+        File.ReadAllText(Directory.GetFiles(_tempDir, "deploy-pool.corrupt-*.json").Single()).Should().Be(damaged);
+        _manager.DeployPoolRecoveryNotice.Should().Contain("已恢复");
+        Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
+        (await new SettingsManager(_tempDir).LoadDeployPoolAsync()).Owned.Should().Equal("角峰");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("null")]
+    [InlineData("{\"owned\":null}")]
+    [InlineData("truncated")]
+    public async Task DamagedDeployPoolWithoutValidBackupStopsLoadingWithoutOverwriting(string? backup)
+    {
+        var path = Path.Combine(_tempDir, "deploy-pool.json");
+        await File.WriteAllTextAsync(path, "broken");
+        if (backup is not null) await File.WriteAllTextAsync(path + ".bak", backup);
+
+        Func<Task> load = () => _manager.LoadDeployPoolAsync();
+        await load.Should().ThrowAsync<InvalidDataException>().WithMessage("*没有可用备份*");
+
+        File.ReadAllText(path).Should().Be("broken");
+        if (backup is not null) File.ReadAllText(path + ".bak").Should().Be(backup);
+        File.ReadAllText(Directory.GetFiles(_tempDir, "deploy-pool.corrupt-*.json").Single()).Should().Be("broken");
+    }
+
+    [Fact]
+    public async Task ValidEmptyDeployPoolDoesNotResurrectAnOlderBackup()
+    {
+        var path = Path.Combine(_tempDir, "deploy-pool.json");
+        (await _manager.LoadDeployPoolAsync()).Owned.Should().BeEmpty();
+        await _manager.SaveDeployPoolAsync(new() { Owned = ["角峰"] });
+        await _manager.SaveDeployPoolAsync(new());
+        (await _manager.LoadDeployPoolAsync()).Owned.Should().BeEmpty();
+        _manager.DeployPoolRecoveryNotice.Should().BeNull();
+        Directory.GetFiles(_tempDir, "deploy-pool.corrupt-*.json").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LockedPreferenceKeepsOriginalAndReleasesSaveLockAfterFailure()
+    {
+        await _manager.SaveAutomaticPurchaseTrackingAsync(false);
+        var path = Path.Combine(_tempDir, "automatic-purchases.json");
+        using (var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Func<Task> save = () => _manager.SaveAutomaticPurchaseTrackingAsync(true);
+            var error = await Record.ExceptionAsync(save);
+            Assert.True(error is IOException or UnauthorizedAccessException, $"Expected a file access failure, got {error}");
+            (await _manager.LoadAutomaticPurchaseTrackingAsync()).Should().BeFalse();
+        }
+        Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
+        await _manager.SaveAutomaticPurchaseTrackingAsync(true).WaitAsync(TimeSpan.FromSeconds(5));
+        (await _manager.LoadAutomaticPurchaseTrackingAsync()).Should().BeTrue();
+        File.ReadAllText(path + ".bak").Should().Be("false");
+    }
+
+    [Fact]
+    public async Task ConcurrentPreferenceSavesKeepLatestSnapshotAndValidBackup()
+    {
+        await Task.WhenAll(Enumerable.Range(0, 20).Select(i => _manager.SaveSkippedVersionAsync($"v1.0.{i}")));
+        (await _manager.LoadSkippedVersionAsync()).Should().Be("v1.0.19");
+        File.ReadAllText(Path.Combine(_tempDir, "skipped_version.txt.bak")).Should().Be("v1.0.18");
+        Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
+    }
+
     [Fact]
     public async Task AutomaticPurchasesDefaultOffAndRoundTripWithoutChangingTracking()
     {

@@ -10,6 +10,88 @@ namespace ASPAssistant.Tests.Services;
 public class EmulatorConnectionTests
 {
     [Theory]
+    [InlineData("127.0.0.1:16384", false)]
+    [InlineData("localhost:16384", false)]
+    [InlineData("[::1]:16384", false)]
+    [InlineData("127.0.0.2:5555", true)]
+    public void ScreenQueryReconnectsMissingTransportButDoesNotAddHealthyQueries(string serial, bool offline)
+    {
+        var settings = new GameConnectionSettings { AdbPath = "selected-adb.exe", AdbSerial = serial };
+        var connected = false;
+        var commands = new List<string[]>();
+        string Run(string path, IEnumerable<string> arguments)
+        {
+            path.Should().Be(settings.AdbPath);
+            var args = arguments.ToArray();
+            commands.Add(args);
+            if (args[0] == "connect")
+            {
+                args.Should().Equal("connect", serial);
+                connected = true;
+                return $"connected to {serial}\n";
+            }
+            args.Take(3).Should().Equal("-s", serial, "shell");
+            if (!connected) throw new IOException(offline ? "ADB 查询失败：adb.exe: device offline"
+                : $"ADB 查询失败：adb.exe: device '{serial}' not found");
+            return args[^1] switch
+            {
+                "activities" => "Display #0\n topResumedActivity=ActivityRecord{abc u0 com.hypergryph.arknights/.MainActivity t1}",
+                "display" => "Display 0:\n uniqueId=local:77",
+                "input" => "FocusedDisplayId: 0",
+                _ => throw new InvalidOperationException("Unexpected ADB command")
+            };
+        }
+
+        var screens = AdbGameScreens.Find(settings, Run);
+        screens.Should().ContainSingle().Which.PhysicalDisplayId.Should().Be("77");
+        commands.Should().HaveCount(5);
+        commands[1].Should().Equal("connect", serial);
+
+        commands.Clear();
+        AdbGameScreens.Find(settings, Run).Should().Equal(screens);
+        commands.Should().HaveCount(3).And.OnlyContain(args => args[0] == "-s");
+
+        connected = false; // The existing ADB server lost its device registration again.
+        commands.Clear();
+        AdbGameScreens.Find(settings, Run).Should().Equal(screens);
+        commands.Should().HaveCount(5);
+        commands.Count(args => args[0] == "connect").Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1:16384", "ADB 查询超时")]
+    [InlineData("127.0.0.1:16384", "ADB 查询失败：device unauthorized")]
+    [InlineData("127.0.0.1:16384", "ADB 查询失败：permission denied")]
+    [InlineData("emulator-5554", "ADB 查询失败：device 'emulator-5554' not found")]
+    [InlineData("usb-device", "ADB 查询失败：device 'usb-device' not found")]
+    public void OtherFailuresAndNonNetworkSerialsDoNotTriggerConnect(string serial, string message)
+    {
+        var calls = 0;
+        var failure = new IOException(message);
+        Action find = () => AdbGameScreens.Find(new() { AdbSerial = serial }, (_, _) => { calls++; throw failure; });
+        find.Should().Throw<IOException>().Which.Should().BeSameAs(failure);
+        calls.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedConnectionOrFailedRetryStopsWithoutLooping(bool retryFails)
+    {
+        const string serial = "127.0.0.1:16384";
+        var calls = 0;
+        Action find = () => AdbGameScreens.Find(new() { AdbSerial = serial }, (_, arguments) =>
+        {
+            calls++;
+            if (arguments.First() == "connect")
+                return retryFails ? $"already connected to {serial}" : $"failed to connect to '{serial}': Connection refused";
+            throw new IOException($"ADB 查询失败：adb.exe: device '{serial}' not found");
+        });
+        find.Should().Throw<IOException>();
+        calls.Should().Be(retryFails ? 3 : 2);
+    }
+
+    [Theory]
     [InlineData("topResumedActivity=", true)]
     [InlineData("mResumedActivity:", false)]
     public void FindsOfficialAndBServerOnTheirOwnScreens(string prefix, bool focus)

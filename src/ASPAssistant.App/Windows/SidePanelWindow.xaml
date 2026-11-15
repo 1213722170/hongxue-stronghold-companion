@@ -460,6 +460,10 @@
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
+                                <TextBlock x:Name="ProjectAddressText" HorizontalAlignment="Center" Margin="0,10,0,8" FontSize="12">
+                                    <Hyperlink x:Name="ProjectAddressLink" NavigateUri="https://github.com/bingyunhe/hongxue-stronghold-companion"
+                                               Foreground="{DynamicResource AccentBrush}" RequestNavigate="OnProjectAddressNavigate">项目地址，欢迎star</Hyperlink>
+                                </TextBlock>
                             </StackPanel>
                         </ScrollViewer>
                     </DockPanel>

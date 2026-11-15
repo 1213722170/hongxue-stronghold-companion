@@ -17,6 +17,7 @@ public partial class LineupEditorWindow : Window
     private readonly IReadOnlyList<Strategy> _strategies;
     private readonly Dictionary<string, Operator> _operatorByName;
     private static readonly string[] Roman = ["", "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"];
+    private int? _editingUpgradeLevel;
 
     /// <summary>Set to the saved Lineup if user clicked Save, else null.</summary>
     public Lineup? Result { get; private set; }
@@ -27,6 +28,11 @@ public partial class LineupEditorWindow : Window
         _strategies = strategies;
         _operatorByName = vm.AllOperators.GroupBy(o => o.Name).ToDictionary(g => g.Key, g => g.First());
         InitializeComponent();
+        UpgradeNotificationsToggle.DataContext = vm;
+        UpgradeLevelBox.ItemsSource = Enumerable.Range(2, 5).ToList();
+        UpgradeLevelBox.ItemStringFormat = "{0}级";
+        UpgradeStartBox.ItemsSource = Enumerable.Range(TerminalUpgradeReminder.MinRound, TerminalUpgradeReminder.MaxRound - TerminalUpgradeReminder.MinRound + 1).ToList();
+        UpgradeEndBox.ItemsSource = UpgradeStartBox.ItemsSource;
         if (!string.IsNullOrEmpty(vm.SourceUrl))
         {
             SourcePanel.Visibility = Visibility.Visible;
@@ -87,6 +93,7 @@ public partial class LineupEditorWindow : Window
         TitleMeta.Text = _vm.Name;
         BuildCards();
         RefreshTargets();
+        RefreshUpgradeReminderChips();
         RefreshSidePanel();
     }
 
@@ -109,6 +116,7 @@ public partial class LineupEditorWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        if (UpgradeReminderEditor.Visibility == Visibility.Visible && !SaveUpgradeReminder()) return;
         if (_vm.ValidationError.Length > 0)
         {
             // The footer already says what is wrong; make it stand out instead of a system dialog.
@@ -132,6 +140,7 @@ public partial class LineupEditorWindow : Window
         if (!ConfirmDialog.Ask(this, "撤销修改", "恢复到本次打开编辑器时的状态？本次未保存的修改将被撤销。", "撤销"))
             return;
         _vm.Reset();
+        UpgradeReminderEditor.Visibility = Visibility.Collapsed;
         LineupNameBox.Text = _vm.Name;
         RefreshEditor();
     }
@@ -145,6 +154,89 @@ public partial class LineupEditorWindow : Window
     }
 
     // ── Cards ───────────────────────────────────────────────────────────────
+
+    private void RefreshUpgradeReminderChips()
+    {
+        UpgradeReminderChips.Children.Clear();
+        foreach (var reminder in _vm.UpgradeReminders.OrderBy(r => r.TargetLevel))
+        {
+            var button = new Button
+            {
+                Content = $"{reminder.TargetLevel}级 · {reminder.RoundText}", Style = (Style)FindResource("CandidateChip"), Height = 24,
+                Tag = UpgradeReminderEditor.Visibility == Visibility.Visible && _editingUpgradeLevel == reminder.TargetLevel ? "pri" : null,
+                ToolTip = reminder.Note.Length > 0 ? reminder.Note : "点击编辑升本回合范围",
+                IsEnabled = UpgradeReminderEditor.Visibility != Visibility.Visible,
+            };
+            button.Click += (_, _) => EditUpgradeReminder(reminder.TargetLevel);
+            UpgradeReminderChips.Children.Add(button);
+        }
+        var add = new Button
+        {
+            Content = _vm.UpgradeReminders.Count == 0 ? "＋ 添加升本提醒" : "＋ 添加",
+            Style = (Style)FindResource("CandidateChip"), Tag = "add",
+            Height = 24,
+            IsEnabled = _vm.UpgradeReminders.Count < 5 && UpgradeReminderEditor.Visibility != Visibility.Visible,
+        };
+        add.Click += (_, _) => EditUpgradeReminder(null);
+        UpgradeReminderChips.Children.Add(add);
+        string error = TerminalUpgradeReminder.ValidationError(_vm.UpgradeReminders);
+        UpgradePlanWarning.Text = error.Length > 0 ? "已有计划需修正：" + error + "；原值保留，点击标签修改。" : "";
+        UpgradePlanWarning.Visibility = error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void EditUpgradeReminder(int? level)
+    {
+        _editingUpgradeLevel = level;
+        var reminder = level is { } target ? _vm.UpgradeReminders.Single(r => r.TargetLevel == target) : null;
+        UpgradeLevelBox.SelectedItem = reminder?.TargetLevel ?? Enumerable.Range(2, 5).First(l => !_vm.UpgradeReminders.Any(r => r.TargetLevel == l));
+        var previous = _vm.UpgradeReminders.Where(r => r.TargetLevel < (int)UpgradeLevelBox.SelectedItem).MaxBy(r => r.TargetLevel);
+        UpgradeStartBox.SelectedItem = reminder?.StartRound ?? previous?.StartRound ?? TerminalUpgradeReminder.MinRound;
+        UpgradeEndBox.SelectedItem = reminder?.EndRound ?? previous?.EndRound ?? TerminalUpgradeReminder.MinRound;
+        UpgradeNoteBox.Text = reminder?.Note ?? "";
+        UpgradeReminderError.Text = reminder is not null && (UpgradeStartBox.SelectedItem is null || UpgradeEndBox.SelectedItem is null)
+            ? $"原计划为{reminder.RoundText}，请重新选择2–14回合" : "";
+        DeleteUpgradeButton.Visibility = level is null ? Visibility.Collapsed : Visibility.Visible;
+        UpgradeReminderEditor.Visibility = Visibility.Visible;
+        RefreshUpgradeReminderChips();
+        UpgradeStartBox.Focus();
+    }
+
+    private bool SaveUpgradeReminder()
+    {
+        if (UpgradeStartBox.SelectedItem is not int start || UpgradeEndBox.SelectedItem is not int end)
+        {
+            UpgradeReminderError.Text = "请选择2–14的开始与结束回合";
+            return false;
+        }
+        var reminder = new TerminalUpgradeReminder((int)UpgradeLevelBox.SelectedItem, start, end, UpgradeNoteBox.Text.Trim());
+        var reminders = _vm.UpgradeReminders.Where(r => r.TargetLevel != _editingUpgradeLevel).Append(reminder).ToList();
+        string error = TerminalUpgradeReminder.ValidationError(reminders);
+        if (error.Length > 0)
+        {
+            UpgradeReminderError.Text = error;
+            return false;
+        }
+        _vm.UpgradeReminders.Clear();
+        _vm.UpgradeReminders.AddRange(reminders.OrderBy(r => r.TargetLevel));
+        UpgradeReminderEditor.Visibility = Visibility.Collapsed;
+        RefreshUpgradeReminderChips();
+        return true;
+    }
+
+    private void OnSaveUpgradeReminder(object sender, RoutedEventArgs e) => SaveUpgradeReminder();
+    private void OnUpgradeRoundChanged(object sender, SelectionChangedEventArgs e) => UpgradeReminderError.Text = "";
+    private void OnCancelUpgradeReminder(object sender, RoutedEventArgs e)
+    {
+        UpgradeReminderEditor.Visibility = Visibility.Collapsed;
+        RefreshUpgradeReminderChips();
+    }
+
+    private void OnDeleteUpgradeReminder(object sender, RoutedEventArgs e)
+    {
+        _vm.UpgradeReminders.RemoveAll(r => r.TargetLevel == _editingUpgradeLevel);
+        UpgradeReminderEditor.Visibility = Visibility.Collapsed;
+        RefreshUpgradeReminderChips();
+    }
 
     private void BuildCards()
     {
