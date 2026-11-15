@@ -34,6 +34,9 @@ jobs:
       - name: Run tests
         if: steps.reuse.outcome != 'success' || steps.reuse.outputs.reuse != 'true'
         run: dotnet test src/ASPAssistant.Tests/ASPAssistant.Tests.csproj -c Release --filter "Category!=LocalScreenshot"
+      - name: Run data tests
+        if: steps.reuse.outcome != 'success' || steps.reuse.outputs.reuse != 'true'
+        run: python -B -m unittest discover -s data/tests -p "test_*.py"
       - name: Extract version
         shell: pwsh
         run: |

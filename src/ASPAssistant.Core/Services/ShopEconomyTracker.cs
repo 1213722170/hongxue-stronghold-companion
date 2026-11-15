@@ -51,7 +51,7 @@ public sealed class ShopEconomyTracker
     /// <summary>Feeds one frame; returns true when <see cref="Current"/> changed.</summary>
     public bool Observe(ShopEconomy read)
     {
-        bool changed = false;
+        bool changed = Current is not null && Current.IsPreparation != read.IsPreparation;
         bool hadRound = _round.HasValue;
         if (_round.Observe(read.Round ?? 0, read.Round is not null))
         {

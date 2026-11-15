@@ -36,6 +36,26 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [InlineData(GameShopTheme.Closure, true)]
     [InlineData(GameShopTheme.Ursus, false)]
     [InlineData(GameShopTheme.Ursus, true)]
+    public Task ProjectLinkAndOriginalGuideSharing(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => ProjectSharingViewTests.Verify(theme, night), $"ProjectLinkAndOriginalGuideSharing-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task UpgradeReminders_EditorAndStatusCard(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => UpgradeReminderViewTests.Verify(theme, night), $"UpgradeReminders-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
     public Task StrategySupportSearch_AcrossThemes(GameShopTheme theme, bool night)
         => ui.RunAsync(() => StrategySupportSearchViewTests.Verify(theme, night), $"StrategySupportSearch-{theme}-{night}");
 

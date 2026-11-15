@@ -16,15 +16,16 @@
                     MouseLeftButtonDown="OnTitleBarDrag">
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Tag="{StaticResource IconClose}" ToolTip="关闭" Click="OnClose" Style="{StaticResource DialogCloseButton}" />
-                    <TextBlock Style="{StaticResource DialogTitleText}" Text="阵容分享 · 链接已生成" />
+                    <TextBlock x:Name="ShareTitleText" Style="{StaticResource DialogTitleText}" Text="阵容分享 · 链接已生成" />
                 </DockPanel>
             </Border>
             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="14,0,14,12">
                 <Button Style="{StaticResource DialogSecondaryButton}" Content="关闭" Click="OnClose" Margin="0,0,8,0" />
-                <Button Style="{StaticResource DialogPrimaryButton}" x:Name="CopyButton" Content="复制链接" Click="OnCopy" />
+                <Button Style="{StaticResource DialogPrimaryButton}" x:Name="CopyButton" Content="复制链接" Click="OnCopy"
+                        Background="{DynamicResource PrimaryActionBrush}" BorderBrush="{DynamicResource PrimaryActionBrush}" Foreground="White" />
             </StackPanel>
             <StackPanel Margin="14,12">
-                <TextBlock Text="将此链接发给其他玩家，即可通过“导入”添加阵容。"
+                <TextBlock x:Name="ShareDescriptionText" Text="将此链接发给其他玩家，即可通过“导入”添加阵容。"
                            FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
                            Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBox Style="{StaticResource DialogTextBox}" x:Name="LinkBox" IsReadOnly="True" TextWrapping="NoWrap" />

@@ -1,11 +1,14 @@
 // Modified for ASP Assistant Regulation on 2026-11-13; see NOTICE.
 using System.IO;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
+using System.Windows.Navigation;
 using System.Windows.Threading;
 using ASPAssistant.App.Views;
 using ASPAssistant.Core;
@@ -31,6 +34,13 @@ public partial class SidePanelWindow : Window
     public event Action? ManualScanRequested;
     public event Action? GameConnectionRequested;
     public event Action<string, bool>? BanToggleRequested;
+
+    private void OnProjectAddressNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Win32Exception) { ShowToast($"无法打开默认浏览器，请手动访问：{e.Uri.AbsoluteUri}"); }
+    }
 
     private readonly LineupShareService _lineupShareService;
     private readonly IReadOnlyList<Operator> _allOperators;
@@ -988,11 +998,10 @@ public partial class SidePanelWindow : Window
             string url;
             try
             {
-                ShowToast("正在准备分享链接…");
-                url = await _lineupShareService.ExportAsync(lineup);
+                url = await PrepareLineupShareAsync(lineup);
             }
             catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidOperationException
-                or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+                or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException)
             {
                 AppLogger.Warn("Lineup", $"Share failed: {ex.Message}");
                 ShowToast($"生成分享链接失败：{ex.Message}");
@@ -1185,10 +1194,33 @@ public partial class SidePanelWindow : Window
         PlannerView.DataContext = PlannerVm;
     }
 
+    internal async Task<string> PrepareLineupShareAsync(Lineup lineup)
+    {
+        if (lineup.SourceUrl is { } source && SklandGuideImporter.IsOfficialGuideUrl(source) && lineup.SourceContentHash is null)
+        {
+            ShowToast("正在核对森空岛原攻略…");
+            try
+            {
+                var original = await _lineupShareService.ImportOfficialGuideAsync(source, _allOperators, _allStrategies);
+                var reference = new LineupEditorViewModel(original.Lineup, _allOperators, _allEquipment, LineupVm.Calculator);
+                lineup.SourceContentHash = LineupShareService.ContentFingerprint(reference.ToLineup());
+            }
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or InvalidDataException or ArgumentException)
+            {
+                // An unavailable source cannot prove the local lineup unchanged; share the local content instead.
+                AppLogger.Warn("Lineup", $"Original guide unavailable; sharing the local lineup: {ex.Message}");
+            }
+        }
+        ShowToast("正在准备分享链接…");
+        return await _lineupShareService.ExportAsync(lineup);
+    }
+
     internal async Task OpenEditorAsync(Lineup? source, string? importNotice)
     {
         var calc = LineupVm.Calculator;
         var editorVm = new LineupEditorViewModel(source, _allOperators, _allEquipment, calc);
+        if (importNotice is not null && source?.SourceUrl is { } url && SklandGuideImporter.IsOfficialGuideUrl(url))
+            editorVm.SourceContentHash = LineupShareService.ContentFingerprint(editorVm.ToLineup());
         var window = new LineupEditorWindow(editorVm, _allStrategies) { Owner = this };
         if (importNotice is not null) window.ShowImportNotice(importNotice);
         await MinimizableDialog.ShowAsync(window, PanelContent);

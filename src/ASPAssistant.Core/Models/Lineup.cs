@@ -92,6 +92,10 @@ public class Lineup
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceUrl { get; set; }
 
+    [JsonPropertyName("sourceContentHash")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceContentHash { get; set; }
+
     /// <summary>后期阵容（最多 9 个），用于列表预览；追踪包含四个阶段，同名干员优先使用后期配置。</summary>
     [JsonPropertyName("slots")]
     public List<LineupSlot> Slots { get; set; } = [];
@@ -113,6 +117,12 @@ public class Lineup
     /// </summary>
     [JsonPropertyName("targetCovenants")]
     public List<TargetCovenant> TargetCovenants { get; set; } = [];
+
+    [JsonPropertyName("upgradeReminders")]
+    public List<TerminalUpgradeReminder> UpgradeReminders { get; set; } = [];
+
+    [JsonPropertyName("upgradeNotificationsEnabled")]
+    public bool UpgradeNotificationsEnabled { get; set; }
 
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

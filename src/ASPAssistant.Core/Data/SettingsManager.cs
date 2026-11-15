@@ -14,6 +14,8 @@ public class SettingsManager
     private readonly SemaphoreSlim _deployPoolLock = new(1, 1);
     private readonly SemaphoreSlim _gameConnectionLock = new(1, 1);
     private readonly SemaphoreSlim _customSelectionLock = new(1, 1);
+    private readonly SemaphoreSlim _preferenceLock = new(1, 1);
+    public string? DeployPoolRecoveryNotice { get; private set; }
     private static readonly JsonSerializerOptions ThemeJsonOptions = new()
     {
         Converters = { new JsonStringEnumConverter<GameShopTheme>(allowIntegerValues: false) }
@@ -105,9 +107,7 @@ public class SettingsManager
 
     public async Task SaveLightThemeAsync(bool isLight)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "light-theme.json"),
-            JsonSerializer.Serialize(isLight));
+        await SavePreferenceAsync("light-theme.json", JsonSerializer.Serialize(isLight));
     }
 
     /// <summary>
@@ -162,11 +162,9 @@ public class SettingsManager
     /// <summary>Saves the run's level; 0 clears it (new run).</summary>
     public async Task SaveTerminalLevelAsync(int level, DateTime? nowUtc = null)
     {
-        var path = Path.Combine(_settingsDir, "terminal-level.json");
         try
         {
-            Directory.CreateDirectory(_settingsDir);
-            await File.WriteAllTextAsync(path,
+            await SavePreferenceAsync("terminal-level.json",
                 JsonSerializer.Serialize(new SavedTerminalLevel(level, nowUtc ?? DateTime.UtcNow)));
         }
         catch (IOException ex)
@@ -177,9 +175,7 @@ public class SettingsManager
 
     public async Task SaveSidebarAppearanceAsync(SidebarAppearance appearance)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "appearance.json"),
-            JsonSerializer.Serialize(appearance, ThemeJsonOptions));
+        await SavePreferenceAsync("appearance.json", JsonSerializer.Serialize(appearance, ThemeJsonOptions));
     }
 
     public async Task<GameShopTheme?> LoadGameShopThemeAsync()
@@ -217,15 +213,12 @@ public class SettingsManager
 
     public async Task SaveAutomaticGameThemeAsync(bool automatic)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "game-theme-auto.json"), JsonSerializer.Serialize(automatic));
+        await SavePreferenceAsync("game-theme-auto.json", JsonSerializer.Serialize(automatic));
     }
 
     public async Task SaveGameShopThemeAsync(GameShopTheme theme)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "game-theme.json"),
-            JsonSerializer.Serialize(theme, ThemeJsonOptions));
+        await SavePreferenceAsync("game-theme.json", JsonSerializer.Serialize(theme, ThemeJsonOptions));
     }
 
     public async Task<bool> LoadTrackMultipleLineupsAsync()
@@ -237,9 +230,7 @@ public class SettingsManager
 
     public async Task SaveTrackMultipleLineupsAsync(bool enabled)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "multiple-lineups.json"),
-            JsonSerializer.Serialize(enabled));
+        await SavePreferenceAsync("multiple-lineups.json", JsonSerializer.Serialize(enabled));
     }
 
     public async Task<bool> LoadAutomaticPurchaseTrackingAsync()
@@ -256,8 +247,7 @@ public class SettingsManager
 
     public async Task SaveAutomaticPurchaseTrackingAsync(bool enabled)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "automatic-purchases.json"), JsonSerializer.Serialize(enabled));
+        await SavePreferenceAsync("automatic-purchases.json", JsonSerializer.Serialize(enabled));
     }
 
     /// <summary>Draw deployable cells and enemy routes over the game board (on by default).</summary>
@@ -271,16 +261,53 @@ public class SettingsManager
 
     public async Task SaveShowBoardOverlayAsync(bool enabled)
     {
-        Directory.CreateDirectory(_settingsDir);
-        await File.WriteAllTextAsync(Path.Combine(_settingsDir, "board-overlay.json"), JsonSerializer.Serialize(enabled));
+        await SavePreferenceAsync("board-overlay.json", JsonSerializer.Serialize(enabled));
     }
 
     public async Task<DeployPoolState> LoadDeployPoolAsync()
     {
         var path = Path.Combine(_settingsDir, "deploy-pool.json");
-        if (!File.Exists(path)) return new DeployPoolState();
-        try { return JsonSerializer.Deserialize<DeployPoolState>(await File.ReadAllTextAsync(path), JsonOptions) ?? new(); }
-        catch (JsonException) { return new DeployPoolState(); }
+        string json;
+        try { json = await File.ReadAllTextAsync(path); }
+        catch (IOException ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return new(); }
+        try { return ParseDeployPool(json); }
+        catch (JsonException)
+        {
+            var preserved = Path.Combine(_settingsDir, $"deploy-pool.corrupt-{Guid.NewGuid():N}.json");
+            File.Copy(path, preserved);
+            DeployPoolState recovered;
+            string backup;
+            try
+            {
+                backup = await File.ReadAllTextAsync(path + ".bak");
+                recovered = ParseDeployPool(backup);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or JsonException)
+            {
+                throw new InvalidDataException($"干员拥有状态已损坏，且没有可用备份。原文件与备份均未覆盖，损坏副本保存在：{preserved}", ex);
+            }
+            var temporary = path + $".{Guid.NewGuid():N}.tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporary, backup);
+                File.Move(temporary, path, true);
+            }
+            finally { File.Delete(temporary); }
+            DeployPoolRecoveryNotice = $"干员拥有状态文件损坏，已恢复上一份有效备份。最近一次修改可能需要重新录入。\n\n损坏原件已保留：{preserved}";
+            AppLogger.Warn("Settings", DeployPoolRecoveryNotice);
+            return recovered;
+        }
+    }
+
+    private static DeployPoolState ParseDeployPool(string json)
+    {
+        var state = JsonSerializer.Deserialize<DeployPoolState>(json, JsonOptions)
+            ?? throw new JsonException("干员拥有状态不能为空");
+        if (state.Owned is null || state.Elite is null || state.Extra is null || state.Counts is null
+            || state.Owned.Concat(state.Elite).Concat(state.Extra).Any(string.IsNullOrWhiteSpace)
+            || state.Counts.Any(pair => string.IsNullOrWhiteSpace(pair.Key) || pair.Value is < 1 or > 9))
+            throw new JsonException("干员拥有状态包含无效字段");
+        return state;
     }
 
     public async Task SaveDeployPoolAsync(DeployPoolState state)
@@ -292,9 +319,9 @@ public class SettingsManager
         var temporary = path + $".{Guid.NewGuid():N}.tmp";
         try
         {
+            await File.WriteAllTextAsync(temporary, json);
             try { File.Copy(path, path + ".bak", true); }
             catch (FileNotFoundException) { }
-            await File.WriteAllTextAsync(temporary, json);
             File.Move(temporary, path, true);
         }
         finally { File.Delete(temporary); _deployPoolLock.Release(); }
@@ -326,18 +353,27 @@ public class SettingsManager
     public async Task SaveRecognitionHotkeyAsync(AssistantHotkey? hotkey)
         => await SaveHotkeyAsync("recognition-hotkey.json", hotkey);
 
-    private async Task SaveHotkeyAsync(string fileName, AssistantHotkey? hotkey)
+    private Task SaveHotkeyAsync(string fileName, AssistantHotkey? hotkey)
+        => SavePreferenceAsync(fileName, JsonSerializer.Serialize(hotkey, JsonOptions));
+
+    private async Task SavePreferenceAsync(string fileName, string content)
     {
-        Directory.CreateDirectory(_settingsDir);
+        await _preferenceLock.WaitAsync();
         var path = Path.Combine(_settingsDir, fileName);
+        var temporary = path + $".{Guid.NewGuid():N}.tmp";
         try
         {
-            await File.WriteAllTextAsync(path + ".tmp", JsonSerializer.Serialize(hotkey, JsonOptions));
+            Directory.CreateDirectory(_settingsDir);
+            await File.WriteAllTextAsync(temporary, content);
             try { File.Copy(path, path + ".bak", true); }
             catch (FileNotFoundException) { }
-            File.Move(path + ".tmp", path, true);
+            File.Move(temporary, path, true);
         }
-        finally { File.Delete(path + ".tmp"); }
+        finally
+        {
+            try { File.Delete(temporary); }
+            finally { _preferenceLock.Release(); }
+        }
     }
 
     public async Task<SidePanelPositionSettings> LoadSidePanelPositionAsync()
@@ -421,6 +457,11 @@ public class SettingsManager
             || state.Entries.Any(e => e is null || e.Origins is null || e.Equipments is null
                 || e.Origins.Any(o => o is null || o.LineupId is null || o.Equipments is null)))
             throw new JsonException("追踪来源配置无效");
+        if (state.Lineups.Any(l => TerminalUpgradeReminder.DataError(l.UpgradeReminders).Length > 0)
+            || state.UpgradeReminderProgress is null
+            || state.UpgradeReminderProgress.Any(p => p is null || string.IsNullOrEmpty(p.LineupId) || p.TargetLevel is < 2 or > 6)
+            || state.UpgradeReminderProgress.Select(p => (p.LineupId, p.TargetLevel)).Distinct().Count() != state.UpgradeReminderProgress.Count)
+            throw new JsonException("升本提醒追踪配置无效");
         var entries = state.Entries;
         var changed = false;
         foreach (var entry in entries.Where(e => e.Type == TrackingType.Operator))
@@ -454,9 +495,7 @@ public class SettingsManager
 
     public async Task SaveSkippedVersionAsync(string tag)
     {
-        Directory.CreateDirectory(_settingsDir);
-        var path = Path.Combine(_settingsDir, "skipped_version.txt");
-        await File.WriteAllTextAsync(path, tag.Trim());
+        await SavePreferenceAsync("skipped_version.txt", tag.Trim());
     }
 
 }

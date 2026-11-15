@@ -31,7 +31,11 @@ public static class AppLogger
             foreach (var old in Directory.GetFiles(logDir, "aspa-*.log"))
             {
                 if (File.GetLastWriteTime(old) < DateTime.Now.AddDays(-7))
-                    File.Delete(old);
+                    try { File.Delete(old); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AppLogger] Cannot prune {old}: {ex.Message}");
+                    }
             }
 
             var date = DateTime.Now.ToString("yyyy-MM-dd");
@@ -43,6 +47,7 @@ public static class AppLogger
             var runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
 
             WriteLine("INFO", "AppLogger", $"===== ASPAssistant {version} | {runtime} | {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====");
+            PruneArtifacts(Path.Combine(logDir, "diagnostics"), null);
         }
         catch (Exception ex)
         {
@@ -67,15 +72,44 @@ public static class AppLogger
         try
         {
             if (!Volatile.Read(ref _isGamePresent)() || _logFilePath is null) return null;
-            var dir = Path.GetDirectoryName(_logFilePath)!;
-            var path = Path.Combine(dir, $"{prefix}-{DateTime.Now:HHmmssfff}{extension}");
-            File.WriteAllBytes(path, bytes);
-            return path;
+            lock (_lock)
+            {
+                var dir = Path.Combine(Path.GetDirectoryName(_logFilePath)!, "diagnostics");
+                Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, $"aspa-artifact-{DateTime.Now:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}-{prefix}{extension}");
+                File.WriteAllBytes(path, bytes);
+                PruneArtifacts(dir, path);
+                return path;
+            }
         }
         catch (Exception ex)
         {
             WriteLine("WARN ", "AppLogger", $"Failed to save artifact: {ex.Message}");
             return null;
+        }
+    }
+
+    // Keep at most 50 generated captures for seven days; legacy evidence beside the log is untouched.
+    private static void PruneArtifacts(string directory, string? latest)
+    {
+        var root = new DirectoryInfo(Path.GetFullPath(directory));
+        FileInfo[] files;
+        try { files = root.GetFiles("aspa-artifact-*"); }
+        catch (DirectoryNotFoundException) { return; }
+        if ((root.Attributes & FileAttributes.ReparsePoint) != 0) return;
+        var cutoff = DateTime.UtcNow.AddDays(-7);
+        var ordered = files.OrderByDescending(file => file.FullName == latest)
+            .ThenByDescending(file => file.LastWriteTimeUtc).ThenByDescending(file => file.Name);
+        var kept = 0;
+        foreach (var file in ordered)
+        {
+            if ((file.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+            if (file.LastWriteTimeUtc >= cutoff && kept++ < 50) continue;
+            try { file.Delete(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AppLogger] Cannot prune {file.Name}: {ex.Message}");
+            }
         }
     }
 

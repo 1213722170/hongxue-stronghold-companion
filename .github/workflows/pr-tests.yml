@@ -46,6 +46,8 @@ jobs:
           dotnet-version: "8.0.x"
       - name: Run tests
         run: dotnet test src/ASPAssistant.Tests/ASPAssistant.Tests.csproj -c Release --filter "Category!=LocalScreenshot"
+      - name: Run data tests
+        run: python -B -m unittest discover -s data/tests -p "test_*.py"
       - name: Record successful test evidence
         shell: pwsh
         run: |
@@ -55,7 +57,7 @@ jobs:
           New-Item -ItemType Directory -Path $folder -Force | Out-Null
           @{ schema = 1; repository = $env:GITHUB_REPOSITORY; sha = $sha;
              runId = $env:GITHUB_RUN_ID; runAttempt = [int]$env:GITHUB_RUN_ATTEMPT;
-             suite = 'public-windows-dotnet-v1'; runnerOS = $env:RUNNER_OS } |
+             suite = 'public-windows-dotnet-python-v2'; runnerOS = $env:RUNNER_OS } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'result.json') -Encoding utf8
       - name: Upload test evidence
         uses: actions/upload-artifact@v7.0.2

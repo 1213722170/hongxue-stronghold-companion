@@ -115,6 +115,123 @@ public class LineupShareServiceTests : IDisposable
         handler.Calls.Should().Be(2);
     }
 
+    [Fact]
+    public async Task OfficialGuideShareReturnsTheOriginalUrlWithoutNetworkOrCacheWrites()
+    {
+        using var handler = new ShareHandler((_, _) => throw new HttpRequestException("Network must not be used for the original guide link"));
+        using var http = new HttpClient(handler);
+        var service = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
+        var lineup = new Lineup { Name = "原攻略阵容", SourceUrl = "  " + SklandGuideImporterTests.Url + "  ",
+            UpgradeNotificationsEnabled = true, UpgradeReminders = [new(3, 5, 6)] };
+        lineup.SourceContentHash = LineupShareService.ContentFingerprint(lineup);
+        (await service.ExportAsync(lineup)).Should().Be(SklandGuideImporterTests.Url);
+        lineup.Id = "another-local-id";
+        lineup.CreatedAt = DateTime.UtcNow.AddDays(-1);
+        lineup.UpdatedAt = DateTime.UtcNow;
+        (await service.ExportAsync(lineup)).Should().Be(SklandGuideImporterTests.Url);
+        handler.Calls.Should().Be(0);
+        Directory.Exists(CacheDirectory).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("early")]
+    [InlineData("mid")]
+    [InlineData("late")]
+    [InlineData("support")]
+    [InlineData("elite")]
+    [InlineData("equipment")]
+    [InlineData("candidate")]
+    [InlineData("tag")]
+    [InlineData("strategy")]
+    [InlineData("target")]
+    [InlineData("upgrade")]
+    [InlineData("notification")]
+    public async Task LocalEditsToAnImportedGuideExportTheEditedLineupAndUndoReturnsToTheSource(string change)
+    {
+        using var handler = new ShareHandler();
+        using var http = new HttpClient(handler);
+        var service = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
+        var lineup = new Lineup { Name = "原攻略", SourceUrl = SklandGuideImporterTests.Url,
+            Slots = [new() { OperatorName = "角峰" }] };
+        lineup.SourceContentHash = LineupShareService.ContentFingerprint(lineup);
+        string original = JsonSerializer.Serialize(lineup);
+        switch (change)
+        {
+            case "name": lineup.Name = "本地修改"; break;
+            case "early": lineup.EarlySlots.Add(new() { OperatorName = "隐现" }); break;
+            case "mid": lineup.MidSlots.Add(new() { OperatorName = "隐现" }); break;
+            case "late": lineup.Slots[0].OperatorName = "隐现"; break;
+            case "support": lineup.SupportSlots.Add(new() { OperatorName = "隐现" }); break;
+            case "elite": lineup.Slots[0].IsElite = true; break;
+            case "equipment": lineup.Slots[0].Equipments.Add("坚守盾牌"); break;
+            case "candidate": lineup.Slots[0].CandidateEquipments.Add(new() { Name = "不退者之盾" }); break;
+            case "tag": lineup.Slots[0].Tags.Add(LineupTag.输出); break;
+            case "strategy": lineup.Strategies.Add(new() { StrategyId = "band_mech" }); break;
+            case "target": lineup.TargetCovenants.Add(new() { Name = "炎" }); break;
+            case "upgrade": lineup.UpgradeReminders.Add(new(3, 5, 6)); break;
+            case "notification": lineup.UpgradeNotificationsEnabled = true; break;
+        }
+        var link = await service.ExportAsync(lineup);
+        link.Should().StartWith("https://dpaste.com/");
+        (await service.ExportAsync(lineup)).Should().Be(link);
+        handler.Calls.Should().Be(1);
+        (await service.ExportAsync(JsonSerializer.Deserialize<Lineup>(original)!)).Should().Be(SklandGuideImporterTests.Url);
+        handler.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SourceBaselineSurvivesEditorPersistenceAndImportedLocalShares()
+    {
+        var calculator = new CovenantCalculator([], [], new Dictionary<string, string>());
+        var original = new Lineup { Name = "原攻略", SourceUrl = SklandGuideImporterTests.Url,
+            Slots = [new() { OperatorName = "角峰" }] };
+        var editor = new ASPAssistant.Core.ViewModels.LineupEditorViewModel(original, [], [], calculator);
+        editor.SourceContentHash = LineupShareService.ContentFingerprint(editor.ToLineup());
+        var unmodified = editor.ToLineup();
+        unmodified.SourceContentHash.Should().Be(LineupShareService.ContentFingerprint(unmodified));
+        var reopened = new ASPAssistant.Core.ViewModels.LineupEditorViewModel(unmodified, [], [], calculator);
+        reopened.Name = "本地修改";
+        var saved = reopened.ToLineup();
+        saved.SourceContentHash.Should().Be(unmodified.SourceContentHash).And.NotBe(LineupShareService.ContentFingerprint(saved));
+        var store = new LineupStore(Path.Combine(_directory, "lineups"), calculator.EquipmentRules);
+        await store.SaveAsync(saved);
+        var loaded = (await store.LoadAllAsync()).Single();
+        loaded.SourceContentHash.Should().Be(unmodified.SourceContentHash);
+        using var handler = new ShareHandler();
+        using var http = new HttpClient(handler);
+        var share = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
+        var imported = await share.ImportAsync(JsonSerializer.Serialize(loaded));
+        imported.SourceContentHash.Should().Be(unmodified.SourceContentHash);
+        (await share.ExportAsync(imported)).Should().StartWith("https://dpaste.com/");
+    }
+
+    [Fact]
+    public async Task ASourceUrlWithoutABaselineDoesNotClaimThatLocalContentIsUnchanged()
+    {
+        using var handler = new ShareHandler();
+        using var http = new HttpClient(handler);
+        var share = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
+        (await share.ExportAsync(new Lineup { SourceUrl = SklandGuideImporterTests.Url, Name = "来源未知的旧版阵容" }))
+            .Should().StartWith("https://dpaste.com/");
+        handler.Calls.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/guide")]
+    [InlineData("http://game.skland.com/arknights/stronghold-guide/detail?guideId=123")]
+    [InlineData("https://game.skland.com.example.com/arknights/stronghold-guide/detail?guideId=123")]
+    [InlineData("https://game.skland.com:8443/arknights/stronghold-guide/detail?guideId=123")]
+    public async Task OtherSourceUrlsContinueToExportTheLocalLineup(string source)
+    {
+        using var handler = new ShareHandler();
+        using var http = new HttpClient(handler);
+        var service = new LineupShareService(EquipmentTestData.Rules, CacheDirectory, http);
+        var lineup = new Lineup { Name = "本地阵容", SourceUrl = source };
+        (await service.ExportAsync(lineup)).Should().StartWith("https://dpaste.com/");
+        handler.Calls.Should().Be(1);
+    }
+
     [Theory]
     [InlineData(29, 1)]
     [InlineData(30, 2)]

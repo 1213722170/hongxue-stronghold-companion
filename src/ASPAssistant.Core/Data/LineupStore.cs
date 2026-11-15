@@ -42,6 +42,8 @@ public class LineupStore
             {
                 var json = await File.ReadAllTextAsync(file);
                 lineup = JsonSerializer.Deserialize<Lineup>(json, JsonOptions);
+                if (lineup is not null && TerminalUpgradeReminder.DataError(lineup.UpgradeReminders) is { Length: > 0 } error)
+                    throw new JsonException(error);
             }
             catch (JsonException ex)
             {

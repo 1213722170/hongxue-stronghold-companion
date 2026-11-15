@@ -2,18 +2,27 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using ASPAssistant.Core;
+using ASPAssistant.Core.Services;
 
 namespace ASPAssistant.App.Windows;
 
 public partial class ShareLinkWindow : Window
 {
     private readonly Action<string> _copyText;
+    private readonly bool _isOfficialGuide;
     private bool _closed;
 
     public ShareLinkWindow(string lineupName, string url, Action<string> copyText)
     {
         InitializeComponent();
-        LinkBox.Text = $"<{lineupName}> {url}";
+        _isOfficialGuide = SklandGuideImporter.IsOfficialGuideUrl(url);
+        LinkBox.Text = _isOfficialGuide ? url : $"<{lineupName}> {url}";
+        if (_isOfficialGuide)
+        {
+            ShareTitleText.Text = "阵容分享 · 森空岛原攻略";
+            ShareDescriptionText.Text = "阵容与导入时一致，分享森空岛原攻略链接。";
+            CopyStatusText.Text = "原攻略链接已准备，正在复制…";
+        }
         _copyText = copyText;
         Closed += (_, _) => _closed = true;
         Loaded += async (_, _) => await CopyLinkAsync();
@@ -32,7 +41,7 @@ public partial class ShareLinkWindow : Window
                 try
                 {
                     _copyText(LinkBox.Text);
-                    CopyStatusText.Text = "链接已复制，可以粘贴分享。";
+                    CopyStatusText.Text = _isOfficialGuide ? "森空岛原攻略链接已复制，可以粘贴分享。" : "链接已复制，可以粘贴分享。";
                     return;
                 }
                 catch (ExternalException ex)
@@ -43,8 +52,8 @@ public partial class ShareLinkWindow : Window
                         await Task.Delay(150);
                         continue;
                     }
-                    AppLogger.Warn("Lineup", $"Link generated; clipboard copy failed: 0x{ex.ErrorCode:X8}");
-                    CopyStatusText.Text = "链接已生成，但暂时无法复制。可再次点击复制，或选中链接手动复制。";
+                    AppLogger.Warn("Lineup", $"Share link ready; clipboard copy failed: 0x{ex.ErrorCode:X8}");
+                    CopyStatusText.Text = (_isOfficialGuide ? "原攻略链接已准备" : "链接已生成") + "，但暂时无法复制。可再次点击复制，或选中链接手动复制。";
                     LinkBox.Focus();
                     LinkBox.SelectAll();
                     return;
