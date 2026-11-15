@@ -129,7 +129,7 @@ internal static class EmulatorFixViewTests
         if (error is not null) throw error;
         var editor = new OperatorPickerWindow(operators, "", new HashSet<string>(), new("后期", "", new HashSet<string>(),
             new Dictionary<string, int>(), _ => new Dictionary<string, int>(), [], []));
-        ((ListBox)editor.FindName("ScopeList")).Visibility.Should().Be(Visibility.Visible);
+        ((ListBox)editor.FindName("ScopeList")).Visibility.Should().Be(Visibility.Collapsed);
         tracking.AddTracking("追踪装备", TrackingType.Equipment);
         view.ApplyRecognizedPurchases(["最终", "其他", "追踪装备", "未追踪装备"]);
         state.IsOwned("最终").Should().BeTrue();
