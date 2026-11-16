@@ -136,7 +136,7 @@ internal static class TrackingWorkflowViewTests
         vm.SyncDeployPool();
         Layout(view, 400);
         var all = view.DeployPage.ActualWidth;
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "tracking-workflow");
+        var folder = Path.Combine(TestOutput.Directory, "tracking-workflow");
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "width-probe.json"), System.Text.Json.JsonSerializer.Serialize(new { partial, all, viewport = view.ActualWidth }));
         partial.Should().BeApproximately(400, 0.1, "the status page must fill the available width even before every operator is owned");
@@ -291,7 +291,7 @@ internal static class TrackingWorkflowViewTests
 
     private static void Save(FrameworkElement view, string name)
     {
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "tracking-workflow");
+        var output = Path.Combine(TestOutput.Directory, "tracking-workflow");
         Directory.CreateDirectory(output);
         var image = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         image.Render(view);

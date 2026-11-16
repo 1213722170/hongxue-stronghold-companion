@@ -5,12 +5,14 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Navigation;
 using System.Windows.Threading;
 using ASPAssistant.App.Views;
+using ASPAssistant.App.Controls;
 using ASPAssistant.Core;
 using ASPAssistant.Core.Data;
 using ASPAssistant.Core.Interop;
@@ -130,6 +132,12 @@ public partial class SidePanelWindow : Window
             Width = _preferredWidthDip;
             _userHeightDip = placement.HeightDip;
         }
+        WindowUiScale.Register();
+        for (int i = 0; i < MainTabs.Items.Count; i++)
+            ((DependencyObject)((TabItem)MainTabs.Items[i]).Content).SetValue(WindowUiScale.PageTargetProperty, (UiScaleTarget)i);
+        SyncUiScaleControls();
+        ApplyUiScale();
+        UiScaleSlider.ValueChanged += OnUiScaleValueChanged;
         CurrentVersionText.Text = $"当前版本  v{typeof(SidePanelWindow).Assembly.GetName().Version!.ToString(3)}";
         GameThemeSelector.SelectedIndex = (int)gameTheme;
         FollowModeThemeToggle.IsChecked = _appearance.FollowModeTheme;
@@ -164,13 +172,15 @@ public partial class SidePanelWindow : Window
         StateChanged    += OnStateChanged;
         Loaded += (_, _) =>
         {
+            ApplyPageScale();
+            if (_appearance.UiScale != 1) ApplyUiScale();
             if (!_positionSettings.FreeMovement || _positionSettings.Placement is not { } saved) return;
             _isProgrammaticChange = true;
             try
             {
                 var hwnd = new WindowInteropHelper(this).Handle;
                 var work = User32.GetMonitorGeometry((int)saved.Left, (int)saved.Top).WorkArea;
-                saved = saved with { WidthDip = _preferredWidthDip };
+                saved = saved with { WidthDip = _preferredWidthDip * _appearance.UiScale };
                 // 第一次移动使 HWND 切换到记忆位置所在屏幕，再使用该屏的 DPI 恢复尺寸。
                 User32.SetWindowBounds(hwnd, WindowGeometry.RestoreBounds(saved, work, User32.GetWindowDpiScale(hwnd)));
                 User32.SetWindowBounds(hwnd, WindowGeometry.RestoreBounds(saved, work, User32.GetWindowDpiScale(hwnd)));
@@ -313,6 +323,8 @@ public partial class SidePanelWindow : Window
             else ManualScanRequested?.Invoke();
             handled = true;
         }
+        if (msg == 0x02E0) // Re-evaluate monitor bounds after WPF handles WM_DPICHANGED.
+            Dispatcher.BeginInvoke(ApplyUiScale);
         return IntPtr.Zero;
     }
 
@@ -648,8 +660,8 @@ public partial class SidePanelWindow : Window
 
             scale = User32.GetWindowDpiScale(hwnd);
             var target = offset is null
-                ? WindowGeometry.SidePanelBounds(gameRect, monitor.WorkArea, scale, _preferredWidthDip, _userHeightDip, isFullscreen)
-                : WindowGeometry.FollowBounds(gameRect, monitor.WorkArea, scale, _preferredWidthDip, _userHeightDip, isFullscreen, offset);
+                ? WindowGeometry.SidePanelBounds(gameRect, monitor.WorkArea, scale, _preferredWidthDip * _appearance.UiScale, _userHeightDip, isFullscreen)
+                : WindowGeometry.FollowBounds(gameRect, monitor.WorkArea, scale, _preferredWidthDip * _appearance.UiScale, _userHeightDip, isFullscreen, offset);
             User32.SetWindowBounds(hwnd, target);
             if (firstFreePlacement)
             {
@@ -690,7 +702,7 @@ public partial class SidePanelWindow : Window
     {
         if (!_isUserMovingOrSizing || _isProgrammaticChange || _isRestoring) return;
         if (e.HeightChanged) _userHeightDip = e.NewSize.Height;
-        if (e.WidthChanged) _preferredWidthDip = e.NewSize.Width;
+        if (e.WidthChanged) _preferredWidthDip = e.NewSize.Width / _appearance.UiScale;
     }
 
     private void OnStateChanged(object? sender, EventArgs e)
@@ -722,6 +734,18 @@ public partial class SidePanelWindow : Window
         WindowState = WindowState.Minimized;
     }
 
+    private void OnSettingsCategoryChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // SelectedIndex is applied while the later page elements are still being initialized.
+        if (!IsInitialized) return;
+        int selected = SettingsCategoryList.SelectedIndex;
+        GameSettingsPage.Visibility = selected == 0 ? Visibility.Visible : Visibility.Collapsed;
+        InterfaceSettingsPage.Visibility = selected == 1 ? Visibility.Visible : Visibility.Collapsed;
+        KeySettingsPage.Visibility = selected == 2 ? Visibility.Visible : Visibility.Collapsed;
+        AboutSettingsPage.Visibility = selected == 3 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsScroll.ScrollToTop();
+    }
+
     private void OnToggleSettings(object sender, RoutedEventArgs e)
     {
         var open = SettingsPanel.Visibility != Visibility.Visible || SettingsPanel.Tag as string == "closing";
@@ -748,6 +772,7 @@ public partial class SidePanelWindow : Window
     private void OnMainTabChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!ReferenceEquals(e.OriginalSource, MainTabs) || !IsLoaded) return;
+        Dispatcher.BeginInvoke(ApplyPageScale, DispatcherPriority.Loaded);
         if (MainTabs.SelectedItem is TabItem { Content: FrameworkElement page }) PageTransition.SlideIn(page, fromY: 8);
     }
 
@@ -779,6 +804,187 @@ public partial class SidePanelWindow : Window
 
     private SidebarAppearance _appearance;
     private bool _syncingAppearance;
+    private bool _uiScaleChanged;
+    private bool _syncingScaleControls;
+    private bool _scaleInputDirty;
+    private UiScaleTarget? _scaleEditorTarget;
+
+    internal SidebarAppearance Appearance => _appearance;
+    internal UiScaleTarget? ActiveScaleTarget => SettingsPanel.Visibility == Visibility.Visible ? null : (UiScaleTarget)MainTabs.SelectedIndex;
+
+    private double EditedScale => _scaleEditorTarget is { } target ? _appearance.ScaleFor(target, _appearance.UiScale) : _appearance.UiScale;
+
+    private void SyncUiScaleControls()
+    {
+        _syncingScaleControls = true;
+        UiScaleSlider.Value = EditedScale * 100;
+        UiScaleValueBox.Text = $"{EditedScale * 100:0}";
+        UiScaleFollowToggle.Visibility = _scaleEditorTarget is null ? Visibility.Collapsed : Visibility.Visible;
+        UiScaleFollowToggle.Content = _scaleEditorTarget == UiScaleTarget.OperatorPicker ? "跟随来源页面" : "跟随全局";
+        UiScaleFollowToggle.IsChecked = _scaleEditorTarget is { } target && !_appearance.ScaleOverrides.ContainsKey(target);
+        UiScaleValueBox.ToolTip = _scaleEditorTarget == UiScaleTarget.OperatorPicker && UiScaleFollowToggle.IsChecked == true
+            ? "跟随来源时，实际比例在打开窗口时确定；输入数值可单独设置" : "支持75–150之间的整数百分比";
+        ResetUiScaleButton.Content = _scaleEditorTarget is null ? "恢复100%" : "恢复跟随";
+        UiScaleInputError.Visibility = Visibility.Collapsed;
+        _scaleInputDirty = false;
+        _syncingScaleControls = false;
+    }
+
+    private void ApplyPageScale()
+    {
+        if (!IsLoaded) return;
+        var tab = (TabItem)MainTabs.SelectedItem;
+        var ratio = _appearance.ScaleFor((UiScaleTarget)MainTabs.SelectedIndex, _appearance.UiScale) / _appearance.UiScale;
+        if (tab.Content is ScaledViewport viewport)
+        {
+            if (ratio == 1) tab.Content = viewport.Detach();
+            else viewport.ContentScale = ratio;
+        }
+        else if (ratio != 1)
+        {
+            var child = (FrameworkElement)tab.Content;
+            tab.Content = null;
+            tab.Content = new ScaledViewport(child, 278, 0) { ContentScale = ratio };
+        }
+    }
+
+    private void ApplyUiScale()
+    {
+        var availableWidth = double.PositiveInfinity;
+        RECT work = default;
+        IntPtr hwnd = IntPtr.Zero;
+        if (IsLoaded)
+        {
+            hwnd = new WindowInteropHelper(this).Handle;
+            var bounds = User32.ReadWindowRect(hwnd);
+            work = User32.GetMonitorGeometry(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2).WorkArea;
+            availableWidth = work.Width / User32.GetWindowDpiScale(hwnd);
+        }
+        var programmatic = _isProgrammaticChange;
+        _isProgrammaticChange = true;
+        try
+        {
+            MinWidth = 0;
+            MaxWidth = Math.Min(400 * _appearance.UiScale, availableWidth);
+            MinWidth = Math.Min(280 * _appearance.UiScale, availableWidth);
+            Width = Math.Min(_preferredWidthDip * _appearance.UiScale, availableWidth);
+            SidebarScaleTransform.ScaleX = SidebarScaleTransform.ScaleY = _appearance.UiScale;
+            ApplyPageScale();
+            WindowUiScale.Refresh(_appearance);
+            if (IsLoaded && !_isUserMovingOrSizing)
+            {
+                if (!_positionSettings.FreeMovement && _lastGameRect is { } game)
+                    UpdatePosition(game, _wasFullscreen);
+                else
+                    User32.SetWindowBounds(hwnd, WindowGeometry.ClampBounds(User32.ReadWindowRect(hwnd), work));
+            }
+        }
+        finally { _isProgrammaticChange = programmatic; }
+    }
+
+    private void OnUiScaleValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_syncingScaleControls) return;
+        SetEditedScale(e.NewValue / 100);
+        SyncUiScaleControls();
+    }
+
+    private void SetEditedScale(double scale)
+    {
+        if (_scaleEditorTarget is { } target) _appearance.ScaleOverrides[target] = scale;
+        else _appearance.UiScale = scale;
+        _uiScaleChanged = true;
+        if (_scaleEditorTarget is null) ApplyUiScale();
+        else { ApplyPageScale(); WindowUiScale.Refresh(_appearance); }
+    }
+
+    private async void OnUiScaleTargetChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || _syncingScaleControls) return;
+        if (!TryApplyScaleInput())
+        {
+            _syncingScaleControls = true;
+            UiScaleTargetSelector.SelectedIndex = _scaleEditorTarget is { } previous ? (int)previous + 1 : 0;
+            _syncingScaleControls = false;
+            return;
+        }
+        var saving = CommitUiScaleAsync();
+        _scaleEditorTarget = UiScaleTargetSelector.SelectedIndex == 0 ? null : (UiScaleTarget)(UiScaleTargetSelector.SelectedIndex - 1);
+        SyncUiScaleControls();
+        await saving;
+    }
+
+    private void OnUiScaleInputChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_syncingScaleControls) _scaleInputDirty = true;
+    }
+
+    private bool TryApplyScaleInput()
+    {
+        if (!_scaleInputDirty) return true;
+        var text = UiScaleValueBox.Text.Trim();
+        if (text.EndsWith('%') || text.EndsWith('％')) text = text[..^1].TrimEnd();
+        if (!int.TryParse(text, out var percent) || percent is < 75 or > 150)
+        {
+            UiScaleInputError.Visibility = Visibility.Visible;
+            return false;
+        }
+        SetEditedScale(percent / 100.0);
+        SyncUiScaleControls();
+        return true;
+    }
+
+    private async void OnUiScaleInputKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape) { SyncUiScaleControls(); e.Handled = true; return; }
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        if (TryApplyScaleInput()) await CommitUiScaleAsync();
+    }
+
+    private async void OnUiScaleInputLostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (TryApplyScaleInput()) await CommitUiScaleAsync();
+    }
+
+    private async void OnUiScaleFollowChanged(object sender, RoutedEventArgs e)
+    {
+        if (_scaleEditorTarget is not { } target) return;
+        if (UiScaleFollowToggle.IsChecked == true) _appearance.ScaleOverrides.Remove(target);
+        else _appearance.ScaleOverrides[target] = EditedScale;
+        _uiScaleChanged = true;
+        SyncUiScaleControls();
+        ApplyPageScale();
+        WindowUiScale.Refresh(_appearance);
+        await CommitUiScaleAsync();
+    }
+
+    // Preview while dragging; persist only the completed gesture, including keyboard and focus changes.
+    private async Task CommitUiScaleAsync()
+    {
+        if (!_uiScaleChanged) return;
+        _uiScaleChanged = false;
+        await SaveAppearanceAsync(UiScaleSlider);
+    }
+
+    private async void OnUiScaleDragCompleted(object sender, DragCompletedEventArgs e) => await CommitUiScaleAsync();
+    private async void OnUiScaleMouseUp(object sender, MouseButtonEventArgs e) => await CommitUiScaleAsync();
+    private async void OnUiScaleKeyUp(object sender, KeyEventArgs e) => await CommitUiScaleAsync();
+    private async void OnUiScaleLostFocus(object sender, KeyboardFocusChangedEventArgs e) => await CommitUiScaleAsync();
+
+    private async void OnResetUiScale(object sender, RoutedEventArgs e)
+    {
+        if (_scaleEditorTarget is { } target)
+        {
+            _appearance.ScaleOverrides.Remove(target);
+            _uiScaleChanged = true;
+            ApplyPageScale();
+            WindowUiScale.Refresh(_appearance);
+        }
+        else SetEditedScale(1);
+        SyncUiScaleControls();
+        await CommitUiScaleAsync();
+    }
 
     private GameShopTheme CurrentUiTheme => _appearance.ThemeFor(GameTheme);
 
@@ -1008,7 +1214,9 @@ public partial class SidePanelWindow : Window
                 return;
             }
             HideToast();
-            new ShareLinkWindow(lineup.Name, url, Clipboard.SetText) { Owner = this }.ShowDialog();
+            var shareDialog = new ShareLinkWindow(lineup.Name, url, Clipboard.SetText) { Owner = this };
+            shareDialog.SetValue(WindowUiScale.PageTargetProperty, UiScaleTarget.Lineups);
+            shareDialog.ShowDialog();
         };
 
         LineupView.ImportLineupRequested += async () =>

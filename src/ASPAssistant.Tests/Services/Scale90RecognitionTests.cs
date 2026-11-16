@@ -56,7 +56,7 @@ public class Scale90RecognitionTests(EnemyRecognitionFixture fixture) : IClassFi
         var detector = new InformationScreenDetector(fixture.Engine, strategy);
         var opening = await detector.IsOpeningScreenAsync(frame, width, height);
         var information = await detector.IsInformationScreenAsync(frame, width, height);
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "4k-scale90");
+        var output = Path.Combine(TestOutput.Directory, "4k-scale90");
         Directory.CreateDirectory(output);
         if (file.Contains("商店"))
         {

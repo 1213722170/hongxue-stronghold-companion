@@ -69,7 +69,7 @@ internal static class EmulatorFixViewTests
         dialog.Show();
         ((RadioButton)dialog.FindName("AdbMode")).IsChecked = true;
         ((System.Windows.Controls.Primitives.ToggleButton)dialog.FindName("ManualToggle")).IsChecked = true;
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "emulator-connection");
+        var output = Path.Combine(TestOutput.Directory, "emulator-connection");
         Directory.CreateDirectory(output);
         foreach (var theme in Enum.GetValues<GameShopTheme>())
         foreach (var night in new[] { false, true })

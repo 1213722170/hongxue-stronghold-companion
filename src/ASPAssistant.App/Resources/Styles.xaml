@@ -357,6 +357,31 @@
         </Setter>
     </Style>
 
+    <Style x:Key="ViewportScrollBar" TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Height" Value="6" />
+                <Setter Property="MinHeight" Value="6" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid>
+                                <Border Background="{DynamicResource ScrollTrackBrush}" CornerRadius="3" />
+                                <Track x:Name="PART_Track" Orientation="Horizontal" IsDirectionReversed="False">
+                                    <Track.Thumb>
+                                        <Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource ScrollThumbBrush}" CornerRadius="3" Margin="0,1" /></ControlTemplate></Thumb.Template></Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Tab Control: dark flat -->
     <!-- Line icons (24×24 grid, drawn as strokes): tab bar, title bar -->
 

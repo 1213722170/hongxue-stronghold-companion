@@ -16,7 +16,8 @@
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="5" GlassFrameThickness="0" />
     </WindowChrome.WindowChrome>
-    <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+    <Border x:Name="SidebarRoot" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border.LayoutTransform><ScaleTransform x:Name="SidebarScaleTransform" /></Border.LayoutTransform>
         <DockPanel>
             <!-- Custom title bar: logo, terminal level / round status, settings · minimize · close -->
             <Border DockPanel.Dock="Top" Height="36" Background="{DynamicResource TitleBackgroundBrush}"
@@ -44,12 +45,9 @@
                                 Style="{StaticResource CloseButton}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Viewbox Width="16" Height="16">
-                            <Canvas Width="24" Height="24">
-                                <Path Data="{StaticResource IconLogo}" Stroke="{DynamicResource TitleDecorBrush}" StrokeThickness="2"
-                                      StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                            </Canvas>
-                        </Viewbox>
+                        <Image x:Name="BrandLogoImage" Source="{StaticResource AspaLogo}" Width="20" Height="20"
+                               Stretch="Uniform" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"
+                               AutomationProperties.Name="鸿雪·卫戍助手图标" />
                         <TextBlock x:Name="BrandTitleText" Text="鸿雪·卫戍助手" Foreground="{DynamicResource TitleTextBrush}"
                                    FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="7,0,6,0"
                                    ToolTip="鸿雪·卫戍助手" />
@@ -230,7 +228,7 @@
                 <!-- Settings page: covers the tabs; the gear (or 返回) closes it -->
                 <Border x:Name="SettingsPanel" Visibility="Collapsed" Background="{DynamicResource PanelBackgroundBrush}">
                     <DockPanel>
-                        <Border DockPanel.Dock="Top" Height="46" Background="{DynamicResource TabBarBackgroundBrush}"
+                        <Border x:Name="SettingsTitleBar" DockPanel.Dock="Top" Height="36" Background="{DynamicResource TabBarBackgroundBrush}"
                                 BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="10,0">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button Click="OnToggleSettings" Tag="{StaticResource IconBack}" ToolTip="返回" AutomationProperties.Name="返回"
@@ -239,8 +237,42 @@
                                            Foreground="{DynamicResource TabActiveBrush}" />
                             </StackPanel>
                         </Border>
+                        <TabControl x:Name="SettingsCategoryList" DockPanel.Dock="Top" Height="30"
+                                    Style="{StaticResource DarkTabControl}" SelectionChanged="OnSettingsCategoryChanged" SelectedIndex="0"
+                                    AutomationProperties.Name="设置分类">
+                            <TabControl.ItemContainerStyle>
+                                <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                                    <Setter Property="Height" Value="29" />
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True" />
+                                                <Condition Binding="{Binding IsChecked, ElementName=FollowModeThemeToggle}" Value="False" />
+                                                <Condition Binding="{Binding SelectedIndex, ElementName=UiThemeSelector}" Value="0" />
+                                                <Condition Binding="{Binding SelectedIndex, ElementName=DayNightSelector}" Value="0" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                        </MultiDataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True" />
+                                                <Condition Binding="{Binding IsChecked, ElementName=FollowModeThemeToggle}" Value="True" />
+                                                <Condition Binding="{Binding SelectedIndex, ElementName=GameThemeSelector}" Value="0" />
+                                                <Condition Binding="{Binding SelectedIndex, ElementName=DayNightSelector}" Value="0" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TabControl.ItemContainerStyle>
+                            <TabItem Header="游戏" />
+                            <TabItem Header="界面" />
+                            <TabItem Header="按键" />
+                            <TabItem Header="关于" />
+                        </TabControl>
                         <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="10,0,10,14">
+                                <StackPanel x:Name="GameSettingsPage">
                                 <StackPanel x:Name="GameThemePanel">
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -322,35 +354,6 @@
                                            Foreground="{DynamicResource TextSecondaryBrush}" />
                                 </StackPanel>
 
-                                <Border Style="{StaticResource SettingsCard}">
-                                    <StackPanel>
-                                        <DockPanel>
-                                            <ListBox x:Name="DayNightSelector" DockPanel.Dock="Right" Style="{StaticResource FilterChipListBox}" VerticalAlignment="Center">
-                                                <ListBoxItem Content="日间" />
-                                                <ListBoxItem Content="夜间" />
-                                            </ListBox>
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="日间 / 夜间" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                                <TextBlock Text="每套主题单独记住" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                            </StackPanel>
-                                        </DockPanel>
-                                        <Border Height="1" Margin="-10,10" Background="{DynamicResource LineBrush}" />
-                                        <DockPanel>
-                                            <CheckBox x:Name="FollowModeThemeToggle" DockPanel.Dock="Right" Style="{StaticResource SwitchToggle}" VerticalAlignment="Center"
-                                                      AutomationProperties.Name="侧栏外观跟随模式主题" />
-                                            <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
-                                                <TextBlock Text="侧栏外观跟随模式主题" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                                <TextBlock Text="关闭后可单独选择侧栏外观" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                            </StackPanel>
-                                        </DockPanel>
-                                        <ListBox x:Name="UiThemeSelector" Style="{StaticResource FilterChipListBox}" Margin="0,8,0,0" Visibility="Collapsed">
-                                            <ListBoxItem Content="终端" />
-                                            <ListBoxItem Content="乌萨斯" />
-                                            <ListBoxItem Content="可露希尔" />
-                                        </ListBox>
-                                    </StackPanel>
-                                </Border>
-
                                 <TextBlock Text="游戏连接" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
                                     <DockPanel>
@@ -370,7 +373,7 @@
                                     </DockPanel>
                                 </Border>
 
-                                <TextBlock Text="追踪与侧栏" Style="{StaticResource SettingsCaption}" />
+                                <TextBlock Text="追踪设置" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
                                     <StackPanel>
                                         <DockPanel>
@@ -400,7 +403,102 @@
                                                 <TextBlock x:Name="BoardStatusText" Text="站位页开启“游戏内显示”时，同时标出地面 / 特殊地面 / 高台和敌人路线" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
                                             </StackPanel>
                                         </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                                </StackPanel>
+                                <StackPanel x:Name="InterfaceSettingsPage" Visibility="Collapsed">
+                                <TextBlock Text="主题相关" Style="{StaticResource SettingsCaption}" />
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <ListBox x:Name="DayNightSelector" DockPanel.Dock="Right" Style="{StaticResource FilterChipListBox}" VerticalAlignment="Center">
+                                                <ListBoxItem Content="日间" />
+                                                <ListBoxItem Content="夜间" />
+                                            </ListBox>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="日间 / 夜间" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                <TextBlock Text="每套主题单独记住" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </DockPanel>
                                         <Border Height="1" Margin="-10,10" Background="{DynamicResource LineBrush}" />
+                                        <DockPanel>
+                                            <CheckBox x:Name="FollowModeThemeToggle" DockPanel.Dock="Right" Style="{StaticResource SwitchToggle}" VerticalAlignment="Center"
+                                                      AutomationProperties.Name="侧栏外观跟随模式主题" />
+                                            <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <TextBlock Text="侧栏外观跟随模式主题" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                <TextBlock Text="关闭后可单独选择侧栏外观" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <ListBox x:Name="UiThemeSelector" Style="{StaticResource FilterChipListBox}" Margin="0,8,0,0" Visibility="Collapsed">
+                                            <ListBoxItem Content="终端" />
+                                            <ListBoxItem Content="乌萨斯" />
+                                            <ListBoxItem Content="可露希尔" />
+                                        </ListBox>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="界面调整" Style="{StaticResource SettingsCaption}" />
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <ComboBox x:Name="UiScaleTargetSelector" SelectedIndex="0" SelectionChanged="OnUiScaleTargetChanged" Margin="0,0,0,8" AutomationProperties.Name="调整对象">
+                                            <ComboBoxItem Content="全局" />
+                                            <ComboBoxItem Content="图鉴" />
+                                            <ComboBoxItem Content="追踪" />
+                                            <ComboBoxItem Content="阵容" />
+                                            <ComboBoxItem Content="对局信息" />
+                                            <ComboBoxItem Content="阵容编辑" />
+                                            <ComboBoxItem Content="干员选择" />
+                                        </ComboBox>
+                                        <CheckBox x:Name="UiScaleFollowToggle" Content="跟随全局" Foreground="{DynamicResource TextPrimaryBrush}" Visibility="Collapsed" Margin="0,0,0,8" Click="OnUiScaleFollowChanged" />
+                                        <DockPanel Margin="0,0,0,8">
+                                            <Button x:Name="ResetUiScaleButton" DockPanel.Dock="Right" Style="{StaticResource SmallActionButton}" Content="恢复100%" Click="OnResetUiScale" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBox x:Name="UiScaleValueBox" Text="100" Width="58" Padding="6,4" Style="{StaticResource DialogTextBox}" VerticalContentAlignment="Center" TextChanged="OnUiScaleInputChanged" KeyDown="OnUiScaleInputKeyDown" LostKeyboardFocus="OnUiScaleInputLostFocus" AutomationProperties.Name="缩放百分比">
+                                                    <TextBox.Template>
+                                                        <ControlTemplate TargetType="TextBox">
+                                                            <Border x:Name="frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{DynamicResource RowCornerRadius}">
+                                                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="frame" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" /></Trigger></ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </TextBox.Template>
+                                                </TextBox>
+                                                <TextBlock Text="%" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <Slider x:Name="UiScaleSlider" Minimum="75" Maximum="150" TickFrequency="5" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                                AutomationProperties.Name="界面调整" Thumb.DragCompleted="OnUiScaleDragCompleted" PreviewMouseLeftButtonUp="OnUiScaleMouseUp" KeyUp="OnUiScaleKeyUp" LostKeyboardFocus="OnUiScaleLostFocus">
+                                            <Slider.Template>
+                                                <ControlTemplate TargetType="Slider">
+                                                    <Grid Height="24" Background="Transparent">
+                                                        <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                                                            <Track.DecreaseRepeatButton>
+                                                                <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False">
+                                                                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" VerticalAlignment="Center" CornerRadius="2" Background="{DynamicResource AccentSolidBrush}" /></ControlTemplate></RepeatButton.Template>
+                                                                </RepeatButton>
+                                                            </Track.DecreaseRepeatButton>
+                                                            <Track.Thumb>
+                                                                <Thumb Width="14" Height="14">
+                                                                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Border CornerRadius="7" Background="{DynamicResource AccentSolidBrush}" BorderBrush="{DynamicResource AccentStrongBorderBrush}" BorderThickness="1" /></ControlTemplate></Thumb.Template>
+                                                                </Thumb>
+                                                            </Track.Thumb>
+                                                            <Track.IncreaseRepeatButton>
+                                                                <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False">
+                                                                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" VerticalAlignment="Center" CornerRadius="2" Background="{DynamicResource BorderBrush}" /></ControlTemplate></RepeatButton.Template>
+                                                                </RepeatButton>
+                                                            </Track.IncreaseRepeatButton>
+                                                        </Track>
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </Slider.Template>
+                                        </Slider>
+                                        <TextBlock x:Name="UiScaleInputError" Visibility="Collapsed" FontSize="11" TextWrapping="Wrap" Padding="4" Margin="0,6,0,0" Foreground="{DynamicResource TextPrimaryBrush}" Background="{DynamicResource DangerSoftBrush}" Text="输入无效：请输入75–150之间的整数百分比，原比例未更改" />
+                                        <TextBlock Text="支持直接输入；页面单独调整，弹框跟随所属页面" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="侧栏位置" Style="{StaticResource SettingsCaption}" />
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
                                         <DockPanel>
                                             <CheckBox x:Name="FreeSidePanelMovementToggle" DockPanel.Dock="Right" Style="{StaticResource SwitchToggle}" VerticalAlignment="Center"
                                                       AutomationProperties.Name="侧栏自由移动" />
@@ -421,6 +519,8 @@
                                     </StackPanel>
                                 </Border>
 
+                                </StackPanel>
+                                <StackPanel x:Name="KeySettingsPage" Visibility="Collapsed">
                                 <StackPanel x:Name="QuickRecognitionPanel">
                                 <TextBlock Text="快捷键设置" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
@@ -448,6 +548,8 @@
                                 </Border>
                                 </StackPanel>
 
+                                </StackPanel>
+                                <StackPanel x:Name="AboutSettingsPage" Visibility="Collapsed">
                                 <TextBlock Text="更新" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
                                     <DockPanel>
@@ -464,6 +566,7 @@
                                     <Hyperlink x:Name="ProjectAddressLink" NavigateUri="https://github.com/bingyunhe/hongxue-stronghold-companion"
                                                Foreground="{DynamicResource AccentBrush}" RequestNavigate="OnProjectAddressNavigate">项目地址，欢迎star</Hyperlink>
                                 </TextBlock>
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </DockPanel>

@@ -120,7 +120,18 @@ public class SettingsManager
         try
         {
             if (File.Exists(path))
-                return JsonSerializer.Deserialize<SidebarAppearance>(await File.ReadAllTextAsync(path), ThemeJsonOptions) ?? new();
+            {
+                var appearance = JsonSerializer.Deserialize<SidebarAppearance>(await File.ReadAllTextAsync(path), ThemeJsonOptions) ?? new();
+                appearance.UiScale = double.IsFinite(appearance.UiScale) ? Math.Clamp(appearance.UiScale, 0.75, 1.5) : 1;
+                if (appearance.ScaleOverrides is null) throw new JsonException("界面比例配置不能为空");
+                foreach (var target in appearance.ScaleOverrides.Keys.ToArray())
+                {
+                    var value = appearance.ScaleOverrides[target];
+                    if (!Enum.IsDefined(target) || !double.IsFinite(value)) appearance.ScaleOverrides.Remove(target);
+                    else appearance.ScaleOverrides[target] = Math.Clamp(value, 0.75, 1.5);
+                }
+                return appearance;
+            }
         }
         catch (JsonException)
         {

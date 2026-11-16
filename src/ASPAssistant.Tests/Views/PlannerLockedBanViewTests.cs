@@ -98,7 +98,7 @@ internal static class PlannerLockedBanViewTests
 
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, int width, string state)
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "planner-locked-ban");
+        var folder = Path.Combine(TestOutput.Directory, "planner-locked-ban");
         Directory.CreateDirectory(folder);
         var image = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth), (int)Math.Ceiling(view.ActualHeight), 96, 96, PixelFormats.Pbgra32);
         image.Render(view);

@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ASPAssistant.App;
@@ -36,7 +37,8 @@ internal static class ProjectSharingViewTests
             new TrackingViewModel(), new GameStateViewModel(), new BanViewModel(), new EnemyViewModel(),
             new LineupViewModel(new LineupStore(Path.Combine(directory, "lineups"), calculator.EquipmentRules), calculator),
             share, operators, [], strategies,
-            new SettingsManager(directory), theme, new SidePanelPositionSettings { FreeMovement = true })
+            new SettingsManager(directory), theme, new SidePanelPositionSettings { FreeMovement = true },
+            appearance: new SidebarAppearance { Theme = theme, Night = new() { [theme] = night } })
             { Opacity = 0, ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000, Height = 650 };
         panel.Show();
         ThemeManager.Apply(theme, night);
@@ -49,19 +51,120 @@ internal static class ProjectSharingViewTests
             // Freeze the completed state: an invisible test window may retain an intermediate compositor frame.
             settings.BeginAnimation(UIElement.OpacityProperty, null);
             settings.Opacity = 1;
+            ((TabControl)panel.FindName("SettingsCategoryList")).SelectedIndex = 3;
             var move = (TranslateTransform)settings.RenderTransform;
             move.BeginAnimation(TranslateTransform.XProperty, null);
             move.BeginAnimation(TranslateTransform.YProperty, null);
             move.X = move.Y = 0;
+            var categories = (TabControl)panel.FindName("SettingsCategoryList");
+            categories.Items.Cast<TabItem>().Select(item => item.Header).Should().Equal("游戏", "界面", "按键", "关于");
+            var pages = new[] { "GameSettingsPage", "InterfaceSettingsPage", "KeySettingsPage", "AboutSettingsPage" }
+                .Select(name => (FrameworkElement)panel.FindName(name)).ToArray();
+            var pageControls = new[]
+            {
+                new[] { "GameThemeSelector", "GameConnectionButton", "MultiLineupTrackingToggle", "AutomaticPurchaseTrackingToggle", "BoardOverlayToggle" },
+                new[] { "DayNightSelector", "FollowModeThemeToggle", "UiThemeSelector", "UiScaleTargetSelector", "UiScaleValueBox", "UiScaleSlider", "ResetUiScaleButton", "FreeSidePanelMovementToggle", "ResetSidePanelPositionButton" },
+                new[] { "AssistantHotkeyBox", "RecognitionHotkeyBox" },
+                new[] { "CheckUpdateButton", "ProjectAddressText" },
+            };
+            for (int page = 0; page < pages.Length; page++)
+                foreach (string name in pageControls[page])
+                    ((FrameworkElement)panel.FindName(name)).IsDescendantOf(pages[page]).Should().BeTrue($"{name} belongs to {pages[page].Name}");
+            var logo = (Image)panel.FindName("BrandLogoImage");
+            logo.Source.Should().BeSameAs(panel.FindResource("AspaLogo"));
+            var toggleNames = new[] { "MultiLineupTrackingToggle", "AutomaticPurchaseTrackingToggle", "FollowModeThemeToggle", "FreeSidePanelMovementToggle" };
+            var originalToggles = toggleNames.Select(name => ((CheckBox)panel.FindName(name)).IsChecked).ToArray();
             var label = (TextBlock)panel.FindName("ProjectAddressText");
             var link = (Hyperlink)panel.FindName("ProjectAddressLink");
             new TextRange(link.ContentStart, link.ContentEnd).Text.Should().Be("项目地址，欢迎star");
             link.NavigateUri.AbsoluteUri.Should().Be("https://github.com/bingyunhe/hongxue-stronghold-companion");
             var scroll = Descendants<ScrollViewer>(settings).First();
+            var animationVerified = false;
             foreach (int width in new[] { 280, 374 })
             {
                 panel.Width = width;
                 Pump();
+                ((Border)panel.FindName("SettingsTitleBar")).ActualHeight.Should().Be(36);
+                categories.ActualHeight.Should().Be(30);
+                var ratios = new Dictionary<string, double>();
+                for (int page = 0; page < pages.Length; page++)
+                {
+                    categories.SelectedIndex = page;
+                    Pump();
+                    var selected = (TabItem)categories.SelectedItem;
+                    var indicator = (Border)selected.Template.FindName("accentLine", selected);
+                    if (!animationVerified)
+                    {
+                        WaitUntil(() => indicator.Opacity >= 0.999 && ((ScaleTransform)indicator.RenderTransform).ScaleX >= 0.999);
+                        animationVerified = true;
+                    }
+                    foreach (TabItem item in categories.Items)
+                    {
+                        var line = (Border)item.Template.FindName("accentLine", item);
+                        line.BeginAnimation(UIElement.OpacityProperty,
+                            new DoubleAnimation(item.IsSelected ? 1 : 0, TimeSpan.Zero));
+                        var scale = ((ScaleTransform)line.RenderTransform).Clone();
+                        line.RenderTransform = scale;
+                        scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                            new DoubleAnimation(item.IsSelected ? 1 : 0.3, TimeSpan.Zero));
+                    }
+                    WaitUntil(() => indicator.Opacity >= 0.999 && ((ScaleTransform)indicator.RenderTransform).ScaleX >= 0.999);
+                    if (page == 1)
+                    {
+                        var movement = (CheckBox)panel.FindName("FreeSidePanelMovementToggle");
+                        var knob = (Border)movement.Template.FindName("knob", movement);
+                        WaitUntil(() => Math.Abs(((TranslateTransform)knob.RenderTransform).X - (movement.IsChecked == true ? 16 : 0)) < 0.001);
+                    }
+                    for (int other = 0; other < pages.Length; other++)
+                        pages[other].IsVisible.Should().Be(other == page);
+                    foreach (string name in pageControls[page])
+                    {
+                        var control = (FrameworkElement)panel.FindName(name);
+                        if (!control.IsVisible)
+                        {
+                            name.Should().BeOneOf("BoardOverlayToggle", "UiThemeSelector");
+                            continue;
+                        }
+                        control.ActualWidth.Should().BeGreaterThan(0, $"{name} remains usable in its category");
+                        var bounds = control.TransformToAncestor(settings).TransformBounds(new Rect(control.RenderSize));
+                        bounds.Left.Should().BeGreaterThanOrEqualTo(0, $"{name} stays inside the settings page");
+                        bounds.Right.Should().BeLessThanOrEqualTo(settings.ActualWidth + 1, $"{name} fits at width {width}");
+                    }
+                    var fixedTop = categories.TranslatePoint(new Point(), settings).Y;
+                    scroll.ScrollToEnd();
+                    Pump();
+                    categories.TranslatePoint(new Point(), settings).Y.Should().Be(fixedTop, "categories stay above the scrollable settings");
+                    for (int index = 0; index < categories.Items.Count; index++)
+                    {
+                        var item = (TabItem)categories.Items[index];
+                        item.Tag.Should().BeNull();
+                        ((ContentPresenter)item.Template.FindName("icon", item)).IsVisible.Should().BeFalse();
+                        item.ActualHeight.Should().Be(29);
+                        var header = (ContentPresenter)item.Template.FindName("headerContent", item);
+                        header.ActualHeight.Should().BeGreaterThan(0);
+                        var headerBounds = header.TransformToAncestor(item).TransformBounds(new Rect(header.RenderSize));
+                        headerBounds.Top.Should().BeGreaterThanOrEqualTo(0);
+                        headerBounds.Bottom.Should().BeLessThanOrEqualTo(item.ActualHeight - 3, "text stays above the selected underline");
+                        var border = (Border)item.Template.FindName("bg", item);
+                        var background = ((SolidColorBrush)border.Background).Color;
+                        var surface = ((SolidColorBrush)panel.FindResource("TabBarBackgroundBrush")).Color;
+                        double alpha = background.A / 255.0;
+                        background = Color.FromRgb((byte)(background.R * alpha + surface.R * (1 - alpha)),
+                            (byte)(background.G * alpha + surface.G * (1 - alpha)), (byte)(background.B * alpha + surface.B * (1 - alpha)));
+                        double ratio = Contrast(((SolidColorBrush)item.Foreground).Color, background);
+                        ratio.Should().BeGreaterThanOrEqualTo(4.5, $"settings category {index}, selected={page}, {theme}, night={night}");
+                        ratios[$"page-{page}-category-{index}"] = ratio;
+                        var bounds = item.TransformToAncestor(categories).TransformBounds(new Rect(item.RenderSize));
+                        bounds.Left.Should().BeGreaterThanOrEqualTo(0);
+                        bounds.Right.Should().BeLessThanOrEqualTo(categories.ActualWidth + 1);
+                    }
+                    scroll.ScrollToTop();
+                    Pump();
+                    Save((FrameworkElement)panel.Content, $"settings-category-{theme}-{night}-{width}-{page}");
+                }
+                toggleNames.Select(name => ((CheckBox)panel.FindName(name)).IsChecked).Should().Equal(originalToggles);
+                ((CheckBox)panel.FindName("BoardOverlayToggle")).IsVisible.Should().BeFalse();
+                File.WriteAllText(Path.Combine(OutputDirectory, $"contrast-settings-{theme}-{night}-{width}.json"), JsonSerializer.Serialize(ratios));
                 scroll.ScrollToEnd();
                 Pump();
                 var update = (Button)panel.FindName("CheckUpdateButton");
@@ -71,6 +174,27 @@ internal static class ProjectSharingViewTests
                     .Should().BeGreaterThanOrEqualTo(4.5, $"project address in {theme}, night={night}");
                 Save((FrameworkElement)panel.Content, $"settings-{theme}-{night}-{width}");
             }
+
+            var followTheme = (CheckBox)panel.FindName("FollowModeThemeToggle");
+            followTheme.IsChecked = true;
+            WaitUntil(() => followTheme.IsEnabled);
+            categories.SelectedIndex = 0;
+            Pump();
+            var followingTab = (TabItem)categories.SelectedItem;
+            var followingBackground = ((SolidColorBrush)((Border)followingTab.Template.FindName("bg", followingTab)).Background).Color;
+            var followingSurface = ((SolidColorBrush)panel.FindResource("TabBarBackgroundBrush")).Color;
+            double followingAlpha = followingBackground.A / 255.0;
+            followingBackground = Color.FromRgb((byte)(followingBackground.R * followingAlpha + followingSurface.R * (1 - followingAlpha)),
+                (byte)(followingBackground.G * followingAlpha + followingSurface.G * (1 - followingAlpha)),
+                (byte)(followingBackground.B * followingAlpha + followingSurface.B * (1 - followingAlpha)));
+            double followingContrast = Contrast(((SolidColorBrush)followingTab.Foreground).Color, followingBackground);
+            followingContrast.Should().BeGreaterThanOrEqualTo(4.5, $"following the mode theme in {theme}, night={night}");
+            File.WriteAllText(Path.Combine(OutputDirectory, $"contrast-following-settings-{theme}-{night}.json"),
+                JsonSerializer.Serialize(new { SelectedText = followingContrast }));
+            followTheme.IsChecked = false;
+            WaitUntil(() => followTheme.IsEnabled);
+            categories.SelectedIndex = 3;
+            Pump();
 
             var import = share.ImportOfficialGuideAsync(Services.SklandGuideImporterTests.Url, operators, strategies);
             WaitUntil(() => import.IsCompleted);
@@ -172,7 +296,7 @@ internal static class ProjectSharingViewTests
         finally { fallback.Close(); }
     }
 
-    private static string OutputDirectory => Path.Combine(AppContext.BaseDirectory, "TestResults", "project-sharing");
+    private static string OutputDirectory => Path.Combine(TestOutput.Directory, "project-sharing");
 
     private static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
