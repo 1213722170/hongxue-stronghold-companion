@@ -2,9 +2,13 @@ param([Parameter(Mandatory)][string]$ResultsDirectory)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# VSTest discovery and TRX use different representations for supplementary Unicode.
+$surrogates = '\\u([dD][89aAbB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})'
+$decode = { param($match) [string][char][Convert]::ToInt32($match.Groups[1].Value, 16) + [char][Convert]::ToInt32($match.Groups[2].Value, 16) }
 $expected = [Collections.Generic.Dictionary[string, int]]::new([StringComparer]::Ordinal)
 $expectedCount = 0
 foreach ($name in Get-Content -LiteralPath (Join-Path $ResultsDirectory 'expected-tests.txt')) {
+    $name = [regex]::Replace($name, $surrogates, $decode)
     if (-not $expected.ContainsKey($name)) { $expected[$name] = 0 }
     $expected[$name]++
     $expectedCount++
@@ -19,7 +23,7 @@ $groups = foreach ($group in @('core', 'ui', 'update')) {
     $skipped = 0
     $failed = 0
     foreach ($result in $results) {
-        $name = [string]$result.testName
+        $name = [regex]::Replace([string]$result.testName, $surrogates, $decode)
         if (-not $expected.ContainsKey($name)) { throw "Unexpected test: $name" }
         if (-not $seen.Add([string]$result.testId)) { throw "Test ran in more than one group: $name" }
         # xUnit truncates long theory arguments, so different cases can share a display name.

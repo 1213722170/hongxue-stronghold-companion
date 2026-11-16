@@ -8,16 +8,21 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Windows .NET tests
+  groups:
+    name: Public tests (${{ matrix.group }})
     runs-on: windows-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, ui, update]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,12 +37,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve merge tree' }
           $headTree = git rev-parse "$env:PR_HEAD_SHA`^{tree}"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve PR head tree' }
-          # Keep testing the merge result when the base introduced different content.
           if ($mergeTree -eq $headTree) {
             git checkout --detach $env:PR_HEAD_SHA
             if ($LASTEXITCODE -ne 0) { throw 'Cannot check out equivalent PR head' }
           }
-      - name: Verify test-reuse decisions
+      - name: Verify test-reuse and coverage decisions
+        if: matrix.group == 'core'
         shell: pwsh
         run: |
           ./.github/scripts/Test-ReleaseTestReuse.ps1
@@ -46,21 +51,83 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-      - name: Run tests
+      - name: Run test group
         shell: pwsh
-        run: ./.github/scripts/Invoke-ParallelTests.ps1 -ResultsDirectory "${{ runner.temp }}/test-results"
+        run: ./.github/scripts/Invoke-TestGroup.ps1 -Group '${{ matrix.group }}' -ResultsDirectory "${{ runner.temp }}/test-results"
+      - name: Capture Windows application errors
+        if: failure() && matrix.group == 'ui'
+        shell: pwsh
+        run: wevtutil qe Application /q:"*[System[(Provider[@Name='.NET Runtime'] or Provider[@Name='Application Error'])]]" /c:5 /rd:true /f:text > "${{ runner.temp }}/test-results/windows-errors.log"
+      - name: Upload group results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: test-results-${{ github.run_attempt }}-${{ matrix.group }}
+          path: |
+            ${{ runner.temp }}/test-results/*.txt
+            ${{ runner.temp }}/test-results/*.json
+            ${{ runner.temp }}/test-results/*.trx
+            ${{ runner.temp }}/test-results/*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  test:
+    name: Windows .NET tests
+    needs: groups
+    if: always()
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require all groups to succeed
+        shell: pwsh
+        run: |
+          if ('${{ needs.groups.result }}' -ne 'success') { throw 'A public test group failed, was cancelled, or was skipped.' }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Select the exact tested commit
+        shell: pwsh
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $mergeTree = git rev-parse 'HEAD^{tree}'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve merge tree' }
+          $headTree = git rev-parse "$env:PR_HEAD_SHA`^{tree}"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve PR head tree' }
+          if ($mergeTree -eq $headTree) {
+            git checkout --detach $env:PR_HEAD_SHA
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot check out equivalent PR head' }
+          }
+      - name: Collect and verify complete test coverage
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'test-results'
+          $sha = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve tested commit' }
+          foreach ($group in @('core', 'ui', 'update')) {
+            $folder = Join-Path $root $group
+            gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "test-results-$env:GITHUB_RUN_ATTEMPT-$group" --dir $folder
+            if ($LASTEXITCODE -ne 0) { throw "Cannot download results for $group" }
+            $result = Get-Content -LiteralPath (Join-Path $folder 'execution-times.json') -Raw | ConvertFrom-Json
+            if ($result.Group -ne $group -or $result.Sha -ne $sha -or $result.ExitCode -ne 0) { throw "Invalid test execution for $group" }
+            [string[]]$names = Get-Content -LiteralPath (Join-Path $folder 'expected-tests.txt')
+            [Array]::Sort($names, [StringComparer]::Ordinal)
+            $list = $names -join "`n"
+            if ($group -eq 'core') {
+              $expected = $list
+              Copy-Item -LiteralPath (Join-Path $folder 'expected-tests.txt') -Destination (Join-Path $root 'expected-tests.txt')
+            } elseif ($list -cne $expected) { throw 'Test discovery differs between groups' }
+          }
+          ./.github/scripts/Write-TestTimingSummary.ps1 -ResultsDirectory $root
       - name: Upload test timings
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: test-timings-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/test-results/discovery.log
-            ${{ runner.temp }}/test-results/expected-tests.txt
-            ${{ runner.temp }}/test-results/*-summary.json
-            ${{ runner.temp }}/test-results/execution-times.json
-            ${{ runner.temp }}/test-results/*/*.trx
-            ${{ runner.temp }}/test-results/*/*.log
+          path: ${{ runner.temp }}/test-results/timing-summary.json
           retention-days: 14
           if-no-files-found: warn
       - name: Run data tests

@@ -6,7 +6,7 @@ $savedSummary = $env:GITHUB_STEP_SUMMARY
 $env:GITHUB_STEP_SUMMARY = $null
 New-Item -ItemType Directory -Path $root | Out-Null
 try {
-    $cases = @('valid', 'truncated-names', 'missing', 'duplicate', 'unexpected', 'failed', 'empty-group', 'skipped-group', 'missing-trx', 'empty-discovery')
+    $cases = @('valid', 'truncated-names', 'unicode-display', 'missing', 'duplicate', 'unexpected', 'failed', 'empty-group', 'skipped-group', 'missing-trx', 'empty-discovery')
     foreach ($case in $cases) {
         $folder = Join-Path $root $case
         New-Item -ItemType Directory -Path $folder | Out-Null
@@ -18,6 +18,7 @@ try {
         }
         switch ($case) {
             'truncated-names' { $expected += 'Core.Pass'; $groups.core += @{Name='Core.Pass'; Outcome='Passed'} }
+            'unicode-display' { $expected[0] = 'Core.🎆'; $groups.core[0].Name = 'Core.\ud83c\udf86' }
             'missing' { $expected += 'Missing.Pass' }
             'duplicate' { $groups.ui += @{Name='Core.Pass'; Outcome='Passed'} }
             'unexpected' { $groups.ui += @{Name='Unexpected.Pass'; Outcome='Passed'} }
@@ -40,9 +41,9 @@ try {
         }
         $rejected = $false
         try { & "$PSScriptRoot/Write-TestTimingSummary.ps1" -ResultsDirectory $folder *> $null }
-        catch { $rejected = $true; if ($case -in @('valid', 'truncated-names')) { throw } }
-        if ($rejected -ne ($case -notin @('valid', 'truncated-names'))) { throw "Incorrect parallel test decision: $case" }
-        if ($case -in @('valid', 'truncated-names')) {
+        catch { $rejected = $true; if ($case -in @('valid', 'truncated-names', 'unicode-display')) { throw } }
+        if ($rejected -ne ($case -notin @('valid', 'truncated-names', 'unicode-display'))) { throw "Incorrect parallel test decision: $case" }
+        if ($case -in @('valid', 'truncated-names', 'unicode-display')) {
             $report = Get-Content -LiteralPath (Join-Path $folder 'timing-summary.json') -Raw | ConvertFrom-Json
             $extra = [int]($case -eq 'truncated-names')
             if ($report.Executed -ne (4 + $extra) -or $report.Passed -ne (3 + $extra) -or $report.Skipped -ne 1 -or $report.Failed -ne 0) {
