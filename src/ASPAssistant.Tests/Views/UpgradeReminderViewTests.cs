@@ -188,7 +188,7 @@ internal static class UpgradeReminderViewTests
         bitmap.Render(element);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "upgrade-reminders");
+        var directory = Path.Combine(TestOutput.Directory, "upgrade-reminders");
         Directory.CreateDirectory(directory);
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);
@@ -211,7 +211,7 @@ internal static class UpgradeReminderViewTests
             ratios[field] = ratio;
             ratio.Should().BeGreaterThanOrEqualTo(4.5, $"{name}: {field} must remain readable on the composited card");
         }
-        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "TestResults", "upgrade-reminders", name + ".json"),
+        File.WriteAllText(Path.Combine(TestOutput.Directory, "upgrade-reminders", name + ".json"),
             System.Text.Json.JsonSerializer.Serialize(ratios));
 
     }
@@ -238,7 +238,7 @@ internal static class UpgradeReminderViewTests
             ratios[field] = ratio;
             ratio.Should().BeGreaterThanOrEqualTo(4.5, $"{name}: {field}");
         }
-        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "TestResults", "upgrade-reminders", name + ".json"),
+        File.WriteAllText(Path.Combine(TestOutput.Directory, "upgrade-reminders", name + ".json"),
             System.Text.Json.JsonSerializer.Serialize(ratios));
     }
 

@@ -78,6 +78,7 @@ internal static class RecognitionHotkeyViewTests
             scanButton.ToolTip.ToString().Should().Contain(box.Text);
 
             ((Button)panel.FindName("SettingsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+            ((TabControl)panel.FindName("SettingsCategoryList")).SelectedIndex = 2; Pump();
             var section = (FrameworkElement)panel.FindName("QuickRecognitionPanel");
             section.BringIntoView(); Pump();
             box.Focus(); Pump();
@@ -138,7 +139,7 @@ internal static class RecognitionHotkeyViewTests
     {
         var until = DateTime.UtcNow.AddMilliseconds(300);
         while (DateTime.UtcNow < until) { Pump(); Thread.Sleep(5); }
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "recognition-hotkey"); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(TestOutput.Directory, "recognition-hotkey"); Directory.CreateDirectory(directory);
         var bitmap = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         var drawing = new DrawingVisual();
         using (var context = drawing.RenderOpen()) context.DrawRectangle(new VisualBrush(view), null, new Rect(0, 0, view.ActualWidth, view.ActualHeight));

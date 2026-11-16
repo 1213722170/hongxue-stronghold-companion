@@ -224,7 +224,7 @@ internal static class EditorRedesignViewTests
     {
         Pump();
         var content = (FrameworkElement)dialog.Content;
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "editor-redesign");
+        var output = Path.Combine(TestOutput.Directory, "editor-redesign");
         Directory.CreateDirectory(output);
         var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(content);

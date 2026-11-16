@@ -89,7 +89,7 @@ internal static class StrategySupportSearchViewTests
     }
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, int width)
     {
-        var dir = Path.Combine(AppContext.BaseDirectory, "TestResults", "strategy-support-search"); Directory.CreateDirectory(dir);
+        var dir = Path.Combine(TestOutput.Directory, "strategy-support-search"); Directory.CreateDirectory(dir);
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth), (int)Math.Ceiling(view.ActualHeight), 96, 96, PixelFormats.Pbgra32);
         var visual = new DrawingVisual();
         using (var drawing = visual.RenderOpen()) drawing.DrawRectangle(new VisualBrush(view), null, new Rect(0, 0, view.ActualWidth, view.ActualHeight));

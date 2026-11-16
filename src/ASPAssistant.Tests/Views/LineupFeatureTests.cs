@@ -178,7 +178,7 @@ internal static class LineupFeatureTests
         bitmap.Render(content);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "lineup-feature-previews");
+        var directory = Path.Combine(TestOutput.Directory, "lineup-feature-previews");
         Directory.CreateDirectory(directory);
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);

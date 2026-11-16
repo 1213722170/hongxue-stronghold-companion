@@ -429,7 +429,7 @@ internal static class ClearAndLineupSourceViewTests
     }
     private static void Save(FrameworkElement view, string name)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "TestResults", "clear-source-previews");
+        var path = Path.Combine(TestOutput.Directory, "clear-source-previews");
         Directory.CreateDirectory(path);
         var bitmap = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(view);

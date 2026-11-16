@@ -143,7 +143,7 @@ internal static class CandidateEquipmentViewTests
     }
     private static void Save(FrameworkElement view, string name)
     {
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "candidate-equipment");
+        var output = Path.Combine(TestOutput.Directory, "candidate-equipment");
         Directory.CreateDirectory(output);
         var size = view.RenderSize;
         var drawing = new DrawingVisual();

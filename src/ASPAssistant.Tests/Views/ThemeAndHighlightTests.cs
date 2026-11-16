@@ -36,6 +36,26 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
     [InlineData(GameShopTheme.Closure, true)]
     [InlineData(GameShopTheme.Ursus, false)]
     [InlineData(GameShopTheme.Ursus, true)]
+    public Task PageScalesAndDialogs_AcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => PageScaleDialogViewTests.Verify(theme, night), $"PageScalesAndDialogs-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
+    public Task SidebarUiScale_AcrossThemes(GameShopTheme theme, bool night)
+        => ui.RunAsync(() => SidebarUiScaleViewTests.Verify(theme, night), $"SidebarUiScale-{theme}-{night}");
+
+    [Theory]
+    [InlineData(GameShopTheme.Terminal, false)]
+    [InlineData(GameShopTheme.Terminal, true)]
+    [InlineData(GameShopTheme.Closure, false)]
+    [InlineData(GameShopTheme.Closure, true)]
+    [InlineData(GameShopTheme.Ursus, false)]
+    [InlineData(GameShopTheme.Ursus, true)]
     public Task ProjectLinkAndOriginalGuideSharing(GameShopTheme theme, bool night)
         => ui.RunAsync(() => ProjectSharingViewTests.Verify(theme, night), $"ProjectLinkAndOriginalGuideSharing-{theme}-{night}");
 
@@ -156,7 +176,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
             mode.Text.Should().Be("规程等级20");
             foreach (var text in new[] { round, money, cost, mode })
                 text.DesiredSize.Width.Should().BeLessThanOrEqualTo(text.ActualWidth + 1);
-            var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "shop-economy");
+            var output = Path.Combine(TestOutput.Directory, "shop-economy");
             Directory.CreateDirectory(output);
             var bitmap = new RenderTargetBitmap(width, 900, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(view);
@@ -211,7 +231,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
             other.IsExpanded.Should().BeFalse();
             other.Header.Should().Be("其他难度血量");
             items.Items.Count.Should().Be(20);
-            var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "boss-hp-focus");
+            var output = Path.Combine(TestOutput.Directory, "boss-hp-focus");
             Directory.CreateDirectory(output);
             var bitmap = new RenderTargetBitmap(width, 1400, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(view);
@@ -261,7 +281,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
         panel.PlannerVm.StatusText = "计算完成";
         panel.PlannerVm.StatusDetail = "0.0 秒 · 改动后自动重算";
         var view = (LineupPlannerView)panel.FindName("PlannerView");
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "planner-chrome-contrast");
+        var output = Path.Combine(TestOutput.Directory, "planner-chrome-contrast");
         Directory.CreateDirectory(output);
         using var assertions = new FluentAssertions.Execution.AssertionScope();
         foreach (var width in new[] { 280, 360, 400 })
@@ -333,7 +353,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
         tooltip.Arrange(new Rect(tooltip.DesiredSize));
         tooltip.UpdateLayout();
         var tooltipText = Descendants<TextBlock>(tooltip).Single(t => t.Text == (string)tooltip.Content);
-        var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "hint-contrast");
+        var output = Path.Combine(TestOutput.Directory, "hint-contrast");
         Directory.CreateDirectory(output);
         using var assertions = new FluentAssertions.Execution.AssertionScope();
         foreach (var (name, picker) in new[]
@@ -582,7 +602,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                 var toggle = (System.Windows.Controls.Primitives.ToggleButton)view.FindName("FilterToggle");
                 toggle.IsChecked = true;
                 var coreList = (ListBox)view.FindName("CoreCovenantFilterList");
-                var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "theme-previews");
+                var output = Path.Combine(TestOutput.Directory, "theme-previews");
                 Directory.CreateDirectory(output);
 
                 foreach (var isLight in new[] { false, true })
@@ -936,7 +956,7 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                         "a manually minimized assistant must stay minimized when the game restores");
                     sidePanel.WindowState = WindowState.Normal;
                     var content = (Border)sidePanel.Content;
-                    var tabs = Descendants<TabControl>(content).Single();
+                    var tabs = (TabControl)sidePanel.FindName("MainTabs");
                     var settingsButton = (Button)sidePanel.FindName("SettingsButton");
                     settingsButton.Content.Should().BeOfType<System.Windows.Shapes.Path>();
                     sidePanel.FindName("ThemeToggleButton").Should().BeNull();

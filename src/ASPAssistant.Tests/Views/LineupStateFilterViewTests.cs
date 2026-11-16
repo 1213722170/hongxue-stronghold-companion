@@ -121,7 +121,7 @@ internal static class LineupStateFilterViewTests
 
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, int width, string state)
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "lineup-state-filters");
+        var folder = Path.Combine(TestOutput.Directory, "lineup-state-filters");
         Directory.CreateDirectory(folder);
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth), (int)Math.Ceiling(view.ActualHeight), 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(view);

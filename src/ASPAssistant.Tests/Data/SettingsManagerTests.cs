@@ -7,6 +7,69 @@ namespace ASPAssistant.Tests.Data;
 
 public class SettingsManagerTests : IDisposable
 {
+    [Fact]
+    public async Task UiScaleOverrides_RoundTripAndInheritWithoutChangingGlobal()
+    {
+        var appearance = new SidebarAppearance { UiScale = 1.25, Theme = GameShopTheme.Closure,
+            ScaleOverrides = new() { [UiScaleTarget.Tracking] = 0.83, [UiScaleTarget.LineupEditor] = 1.2 } };
+        await _manager.SaveSidebarAppearanceAsync(appearance);
+        var loaded = await new SettingsManager(_tempDir).LoadSidebarAppearanceAsync();
+        loaded.UiScale.Should().Be(1.25);
+        loaded.ScaleFor(UiScaleTarget.Tracking, loaded.UiScale).Should().Be(0.83);
+        loaded.ScaleFor(UiScaleTarget.Codex, loaded.UiScale).Should().Be(1.25);
+        loaded.ScaleFor(UiScaleTarget.OperatorPicker, loaded.ScaleFor(UiScaleTarget.LineupEditor, loaded.UiScale)).Should().Be(1.2);
+        loaded.ScaleOverrides.Remove(UiScaleTarget.Tracking);
+        loaded.ScaleFor(UiScaleTarget.Tracking, loaded.UiScale).Should().Be(1.25);
+        loaded.Theme.Should().Be(GameShopTheme.Closure);
+    }
+
+    [Fact]
+    public async Task UiScaleOverrides_ValidateFileValuesAtLoadBoundary()
+    {
+        await _manager.SaveSidebarAppearanceAsync(new SidebarAppearance { UiScale = 1.1,
+            ScaleOverrides = new() { [UiScaleTarget.Tracking] = 0, [UiScaleTarget.Lineups] = 8, [(UiScaleTarget)99] = 1 } });
+        var loaded = await _manager.LoadSidebarAppearanceAsync();
+        loaded.ScaleOverrides.Should().HaveCount(2);
+        loaded.ScaleOverrides[UiScaleTarget.Tracking].Should().Be(0.75);
+        loaded.ScaleOverrides[UiScaleTarget.Lineups].Should().Be(1.5);
+        loaded.UiScale.Should().Be(1.1);
+    }
+
+    [Fact]
+    public async Task SidebarUiScale_LegacyAppearanceStartsAt100Percent()
+    {
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "appearance.json"), """{"theme":"Closure","night":{"Closure":true}}""");
+        var appearance = await _manager.LoadSidebarAppearanceAsync();
+        appearance.UiScale.Should().Be(1);
+        appearance.Theme.Should().Be(GameShopTheme.Closure);
+        appearance.IsNight(GameShopTheme.Closure).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0.75)]
+    [InlineData(1)]
+    [InlineData(1.5)]
+    public async Task SidebarUiScale_RoundTripsWithoutChangingTheme(double scale)
+    {
+        await _manager.SaveSidebarAppearanceAsync(new SidebarAppearance { UiScale = scale, Theme = GameShopTheme.Ursus, FollowModeTheme = true });
+        var appearance = await new SettingsManager(_tempDir).LoadSidebarAppearanceAsync();
+        appearance.UiScale.Should().Be(scale);
+        appearance.Theme.Should().Be(GameShopTheme.Ursus);
+        appearance.FollowModeTheme.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0, 0.75)]
+    [InlineData(9, 1.5)]
+    public async Task SidebarUiScale_FileBoundaryClampsOutsideSupportedRange(double scale, double expected)
+    {
+        await _manager.SaveSidebarAppearanceAsync(new SidebarAppearance { UiScale = scale, Theme = GameShopTheme.Closure });
+        var appearance = await _manager.LoadSidebarAppearanceAsync();
+        appearance.UiScale.Should().Be(expected);
+        appearance.Theme.Should().Be(GameShopTheme.Closure);
+    }
+
     [Theory]
     [InlineData("{\"owned\":")]
     [InlineData("null")]

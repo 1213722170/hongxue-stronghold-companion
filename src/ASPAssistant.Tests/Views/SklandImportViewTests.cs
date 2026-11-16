@@ -190,7 +190,7 @@ internal static class SklandImportViewTests
         image.Render(content);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(image));
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "skland-import-previews");
+        var folder = Path.Combine(TestOutput.Directory, "skland-import-previews");
         Directory.CreateDirectory(folder);
         using var stream = File.Create(Path.Combine(folder, name + ".png"));
         encoder.Save(stream);

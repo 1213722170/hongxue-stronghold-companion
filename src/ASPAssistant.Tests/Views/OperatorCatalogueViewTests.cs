@@ -82,7 +82,7 @@ internal static class OperatorCatalogueViewTests
 
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, string suffix)
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "operator-catalogue");
+        var directory = Path.Combine(TestOutput.Directory, "operator-catalogue");
         Directory.CreateDirectory(directory);
         var bitmap = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(view);

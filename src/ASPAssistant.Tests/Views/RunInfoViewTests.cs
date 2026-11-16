@@ -170,7 +170,7 @@ internal static class RunInfoViewTests
 
     private static void Save(FrameworkElement element, string name)
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "run-info");
+        var folder = Path.Combine(TestOutput.Directory, "run-info");
         Directory.CreateDirectory(folder);
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(element);

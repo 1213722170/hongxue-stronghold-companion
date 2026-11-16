@@ -185,7 +185,7 @@ internal static class OperatorPickerPerformanceViewTests
         bitmap.Render(content);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "operator-picker-performance");
+        var directory = Path.Combine(TestOutput.Directory, "operator-picker-performance");
         Directory.CreateDirectory(directory);
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);

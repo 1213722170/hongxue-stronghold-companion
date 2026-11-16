@@ -147,7 +147,7 @@ internal static class CoreBanViewTests
 
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, string suffix)
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "core-ban"); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(TestOutput.Directory, "core-ban"); Directory.CreateDirectory(directory);
         var bitmap = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32); bitmap.Render(view);
         var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
         using var file = File.Create(Path.Combine(directory, $"{theme}-{night}-{suffix}.png")); png.Save(file);

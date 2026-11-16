@@ -193,6 +193,7 @@ internal static class UpdateAndTrayTests
                 ((Button)panel.FindName("SettingsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 WaitForAnimation();
                 var settingsPanel = (Border)panel.FindName("SettingsPanel");
+                ((TabControl)panel.FindName("SettingsCategoryList")).SelectedIndex = 2;
                 Descendants<ScrollViewer>(settingsPanel).First().ScrollToBottom();
                 Pump();
                 var hotkeyBox = (TextBox)panel.FindName("AssistantHotkeyBox");
@@ -263,7 +264,7 @@ internal static class UpdateAndTrayTests
     }
     private static void Save(FrameworkElement view, string name)
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "update-tray-previews");
+        var folder = Path.Combine(TestOutput.Directory, "update-tray-previews");
         Directory.CreateDirectory(folder);
         var image = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32);
         image.Render(view);

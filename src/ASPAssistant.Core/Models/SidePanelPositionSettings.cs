@@ -1,7 +1,7 @@
 // Modified for ASP Assistant Arknights on 2026-11-12; see NOTICE.
 namespace ASPAssistant.Core.Models;
 
-/// <summary>Left/Top 是物理桌面坐标，宽高使用 WPF DIP。</summary>
+/// <summary>Left/Top 是物理桌面坐标；侧栏保存的 WidthDip 以100%界面大小为基准，HeightDip 为实际WPF高度。</summary>
 public sealed record SidePanelPlacement(double Left, double Top, double WidthDip, double HeightDip);
 
 /// <summary>相对游戏右上角的偏移，使用侧栏所在屏幕的 WPF DIP。</summary>

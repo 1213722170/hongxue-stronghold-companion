@@ -214,7 +214,7 @@ internal static class MinimizableDialogTests
         image.Render(content);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(image));
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "minimize-previews");
+        var directory = Path.Combine(TestOutput.Directory, "minimize-previews");
         Directory.CreateDirectory(directory);
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);

@@ -116,7 +116,7 @@ internal static class EquipmentCompletionViewTests
     }
     private static void Save(FrameworkElement view, GameShopTheme theme, bool night, string suffix)
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "TestResults", "equipment-completion"); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(TestOutput.Directory, "equipment-completion"); Directory.CreateDirectory(directory);
         var until = DateTime.UtcNow.AddMilliseconds(250);
         while (DateTime.UtcNow < until) { Pump(); Thread.Sleep(5); }
         var bitmap = new RenderTargetBitmap((int)view.ActualWidth, (int)view.ActualHeight, 96, 96, PixelFormats.Pbgra32); bitmap.Render(view);

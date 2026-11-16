@@ -71,7 +71,7 @@ internal static class LineupRecommendationViewTests
                 {
                     panel.Width = width;
                     Pump();
-                    var output = Path.Combine(AppContext.BaseDirectory, "TestResults", "lineup-recommendation");
+                    var output = Path.Combine(TestOutput.Directory, "lineup-recommendation");
                     Directory.CreateDirectory(output);
                     var content = (FrameworkElement)panel.Content;
                     var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);

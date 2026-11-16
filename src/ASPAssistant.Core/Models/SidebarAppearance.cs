@@ -3,12 +3,23 @@ using System.Text.Json.Serialization;
 
 namespace ASPAssistant.Core.Models;
 
+public enum UiScaleTarget { Codex, Tracking, Lineups, RunInfo, LineupEditor, OperatorPicker }
+
 /// <summary>
 /// Side panel look: one of the three mode themes (终端 / 乌萨斯 / 可露希尔), each with a day and a night palette.
 /// Defaults: 终端 日间, chosen on its own (not following the 模式主题 used for shop recognition).
 /// </summary>
 public sealed class SidebarAppearance
 {
+    [JsonPropertyName("uiScale")]
+    public double UiScale { get; set; } = 1;
+
+    [JsonPropertyName("scaleOverrides")]
+    public Dictionary<UiScaleTarget, double> ScaleOverrides { get; set; } = [];
+
+    public double ScaleFor(UiScaleTarget target, double inheritedScale)
+        => ScaleOverrides.TryGetValue(target, out var scale) ? scale : inheritedScale;
+
     /// <summary>Use the 模式主题 (shop recognition theme) as the side panel theme.</summary>
     [JsonPropertyName("followModeTheme")]
     public bool FollowModeTheme { get; set; }
