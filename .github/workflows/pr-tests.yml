@@ -39,13 +39,30 @@ jobs:
           }
       - name: Verify test-reuse decisions
         shell: pwsh
-        run: ./.github/scripts/Test-ReleaseTestReuse.ps1
+        run: |
+          ./.github/scripts/Test-ReleaseTestReuse.ps1
+          ./.github/scripts/Test-ParallelTests.ps1
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
       - name: Run tests
-        run: dotnet test src/ASPAssistant.Tests/ASPAssistant.Tests.csproj -c Release --filter "Category!=LocalScreenshot"
+        shell: pwsh
+        run: ./.github/scripts/Invoke-ParallelTests.ps1 -ResultsDirectory "${{ runner.temp }}/test-results"
+      - name: Upload test timings
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: test-timings-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/test-results/discovery.log
+            ${{ runner.temp }}/test-results/expected-tests.txt
+            ${{ runner.temp }}/test-results/*-summary.json
+            ${{ runner.temp }}/test-results/execution-times.json
+            ${{ runner.temp }}/test-results/*/*.trx
+            ${{ runner.temp }}/test-results/*/*.log
+          retention-days: 14
+          if-no-files-found: warn
       - name: Run data tests
         run: python -B -m unittest discover -s data/tests -p "test_*.py"
       - name: Record successful test evidence
