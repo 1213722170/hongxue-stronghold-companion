@@ -40,6 +40,7 @@ internal static class CoreBanViewTests
         var equipment = new EquipmentBrowseViewModel();
         equipment.LoadEquipment([], [], [], new Dictionary<string, string>());
         var bans = new BanViewModel();
+        vm.SetCovenantBanChecker(bans.IsCovenantBanned);
         var calculator = new CovenantCalculator(operators, covenants, new Dictionary<string, string>());
         var lineups = new LineupViewModel(new LineupStore(Path.Combine(folder, "lineups"), calculator.EquipmentRules), calculator);
         lineups.LoadLineups([new() { Id = "a", Name = "含单主", Slots = [new() { OperatorName = "单主盟约" }] },
@@ -56,16 +57,14 @@ internal static class CoreBanViewTests
             foreach (var width in new[] { 280, 360, 400 })
             {
                 panel.Width = width; Pump();
-                var only = (CheckBox)view.FindName("OnlyCurrentRunToggle");
+                view.FindName("OnlyCurrentRunToggle").Should().BeNull();
                 var filter = (ToggleButton)view.FindName("FilterToggle");
                 var availability = (ListBox)view.FindName("AvailabilityFilterList");
                 var source = (ListBox)view.FindName("OperatorSourceList");
-                var bounds = only.TransformToAncestor(view).TransformBounds(new Rect(0, 0, only.ActualWidth, only.ActualHeight));
                 var filterBounds = filter.TransformToAncestor(view).TransformBounds(new Rect(0, 0, filter.ActualWidth, filter.ActualHeight));
                 var availabilityBounds = availability.TransformToAncestor(view).TransformBounds(new Rect(0, 0, availability.ActualWidth, availability.ActualHeight));
                 var sourceBounds = source.TransformToAncestor(view).TransformBounds(new Rect(0, 0, source.ActualWidth, source.ActualHeight));
-                sourceBounds.Right.Should().BeLessThanOrEqualTo(bounds.Left);
-                (sourceBounds.Top + sourceBounds.Height / 2).Should().BeApproximately(bounds.Top + bounds.Height / 2, 0.5);
+                sourceBounds.Right.Should().BeLessThanOrEqualTo(view.ActualWidth);
                 availabilityBounds.Right.Should().BeLessThanOrEqualTo(filterBounds.Left);
                 foreach (var label in Desc<TextBlock>(availability))
                 {
@@ -95,6 +94,27 @@ internal static class CoreBanViewTests
             ((ItemsControl)((RunBanView)panel.FindName("RunBanView")).FindName("BannedOperators")).Items.Cast<Operator>()
                 .Select(op => op.Name).Should().BeEquivalentTo("单主盟约", "自选单主", "未选自选", "手动禁用");
             vm.CoreChips.Single(c => c.Value == "炎").Count.Should().Be(1);
+            vm.SetAvailableCovenants(["谢拉格", "突袭", "奥术"]);
+            panel.EnableCurrentRunFilters();
+            ((ToggleButton)view.FindName("FilterToggle")).IsChecked = true; Pump();
+            var fireChip = vm.CoreChips.Single(c => c.Value == "炎");
+            var fireToggle = Desc<ToggleButton>(view).Single(t => ReferenceEquals(t.DataContext, fireChip));
+            fireToggle.IsEnabled.Should().BeTrue();
+            fireChip.CountText.Should().Be("剩 1");
+            fireToggle.IsChecked = true;
+            ((ListBox)view.FindName("AvailabilityFilterList")).SelectedIndex = 1; Pump();
+            vm.FilteredOperators.Should().ContainSingle(o => o.Name == "双主盟约");
+            Save(view, theme, night, "banned-core-filter");
+            bans.SetCovenantBans(["炎", "谢拉格"]); Pump();
+            fireToggle.IsEnabled.Should().BeTrue();
+            fireToggle.IsChecked.Should().BeTrue();
+            fireChip.CountText.Should().Be("剩 0");
+            vm.FilteredOperators.Should().BeEmpty();
+            bans.SetCovenantBans(["炎"]); Pump();
+            fireToggle.IsChecked.Should().BeTrue();
+            vm.FilteredOperators.Should().ContainSingle(o => o.Name == "双主盟约");
+            fireToggle.IsChecked = false;
+            ((ListBox)view.FindName("AvailabilityFilterList")).SelectedIndex = 0; Pump();
             lineups.SelectedAvailabilityFilter = LineupAvailabilityFilter.Available;
             lineups.VisibleLineups.Select(l => l.Name).Should().Equal("含双主");
             Save(view, theme, night, "core-ban");

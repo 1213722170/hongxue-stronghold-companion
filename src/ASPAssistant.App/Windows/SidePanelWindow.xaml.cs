@@ -343,7 +343,6 @@ public partial class SidePanelWindow : Window
 
     public void EnableCurrentRunFilters()
     {
-        OperatorBrowseVm.OnlyCurrentRun = true;
         PlannerVm.OnlyCurrentRun = true;
     }
 

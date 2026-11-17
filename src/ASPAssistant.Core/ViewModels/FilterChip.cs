@@ -12,7 +12,7 @@ public enum FilterChipBan
     None,
     /// <summary>Core covenant banned: cannot be used at all (dashed, struck through).</summary>
     Blocked,
-    /// <summary>Additional covenant banned: only its fully banned holders are gone; <see cref="FilterChip.CountText"/> shows what is left.</summary>
+    /// <summary>Covenant banned: surviving holders can still be filtered; <see cref="FilterChip.CountText"/> shows what is left.</summary>
     Reduced
 }
 

@@ -1047,23 +1047,17 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                                 operatorFilters.IsChecked = true;
                                 var previousAvailable = vm.HighlightedCovenants.ToArray();
                                 var previousBans = sidePanel.BanVm.BannedCovenants.ToArray();
-                                var previousOnly = vm.OnlyCurrentRun;
                                 var previousPlannerOnly = sidePanel.PlannerVm.OnlyCurrentRun;
                                 sidePanel.BanVm.SetCovenantBans(["炎"]);
                                 vm.SetAvailableCovenants(["维多利亚", "精准"]);
-                                var only = (CheckBox)operatorPage.FindName("OnlyCurrentRunToggle");
-                                only.IsEnabled.Should().BeTrue();
-                                only.IsChecked = true;
+                                operatorPage.FindName("OnlyCurrentRunToggle").Should().BeNull();
                                 sidePanel.PlannerVm.OnlyCurrentRun = true;
                                 content.UpdateLayout();
-                                ((ListBox)operatorPage.FindName("CoreCovenantFilterList")).Items.Cast<string>()
-                                    .Should().Contain("维多利亚").And.NotContain("炎");
+                                vm.CoreChips.Select(c => c.Value).Should().Contain("维多利亚").And.Contain("炎");
                                 sidePanel.Width = 280;
                                 content.Measure(new Size(280, 900));
                                 content.Arrange(new Rect(0, 0, 280, 900));
                                 content.UpdateLayout();
-                                only.ActualWidth.Should().BeGreaterThan(40);
-                                (only.TranslatePoint(new Point(), operatorPage).X + only.ActualWidth).Should().BeLessThanOrEqualTo(operatorPage.ActualWidth);
                                 Save(content, Path.Combine(output, isLight ? "light-operator-current-run.png" : "dark-operator-current-run.png"));
                                 sidePanel.Width = 310;
                                 content.Measure(new Size(310, 900));
@@ -1073,14 +1067,11 @@ public class ThemeAndHighlightTests(WpfTestHost ui) : IClassFixture<WpfTestHost>
                                 clearRun.Content.Should().Be("清除录入");
                                 clearRun.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                                 content.UpdateLayout();
-                                only.IsEnabled.Should().BeFalse();
-                                only.IsChecked.Should().BeFalse();
                                 sidePanel.BanVm.BannedCovenants.Should().BeEmpty();
                                 sidePanel.PlannerVm.HasRunInfo.Should().BeFalse();
                                 sidePanel.PlannerVm.OnlyCurrentRun.Should().BeFalse();
                                 sidePanel.BanVm.SetCovenantBans(previousBans);
                                 vm.SetAvailableCovenants(previousAvailable);
-                                vm.OnlyCurrentRun = previousOnly;
                                 sidePanel.PlannerVm.OnlyCurrentRun = previousPlannerOnly;
                                 operatorFilters.IsChecked = filtersWereOpen;
                             }

@@ -1,4 +1,4 @@
-<!-- Modified for ASP Assistant Arknights on 2026-11-13; see NOTICE. -->
+<!-- Modified for ASP Assistant Arknights on 2026-11-16; see NOTICE. -->
 <UserControl x:Class="ASPAssistant.App.Views.OperatorBrowseView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -25,10 +25,6 @@
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Margin="10,10,10,0">
             <DockPanel>
-            <CheckBox x:Name="OnlyCurrentRunToggle" DockPanel.Dock="Right" Content="只看本局" FontSize="11"
-                      VerticalAlignment="Center" VerticalContentAlignment="Center"
-                      Foreground="{DynamicResource TextPrimaryBrush}" IsChecked="{Binding OnlyCurrentRun}"
-                      IsEnabled="{Binding HasRunInfo}" ToolTip="筛选里只列出本局录入的盟约" />
             <ListBox x:Name="OperatorSourceList" HorizontalAlignment="Left" Style="{StaticResource SegmentedListBox}"
                      SelectedValuePath="Tag" SelectedValue="{Binding SelectedOperatorSource}">
                 <ListBoxItem Content="默认干员" Tag="{x:Static viewModels:OperatorSourceFilter.Default}" />

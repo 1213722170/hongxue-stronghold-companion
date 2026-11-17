@@ -18,7 +18,7 @@ public class RunAvailabilityTests
     }
 
     [Fact]
-    public void OnlyCurrentRunHidesUnavailableChoicesAndRemovesInvisibleFilters()
+    public void RunInfoChangesPreserveAllCovenantsAndSelectedFilters()
     {
         var vm = new OperatorBrowseViewModel();
         vm.LoadOperators([
@@ -29,16 +29,75 @@ public class RunAvailabilityTests
         vm.SetCoreCovenantFilters(["炎"]);
         vm.SetOtherCovenantFilters(["精准"]);
         vm.SetAvailableCovenants(["维多利亚", "坚守"]);
-        vm.OnlyCurrentRun = true;
-        vm.AvailableCoreCovenants.Should().Equal("", "维多利亚");
-        vm.AvailableOtherCovenants.Should().Equal("", "坚守");
-        vm.ActiveFilterTags.Should().NotContain("炎").And.NotContain("精准");
-        vm.FilteredOperators.Should().HaveCount(2);
+        vm.HasRunInfo.Should().BeTrue();
+        vm.AvailableCoreCovenants.Should().BeEquivalentTo("", "炎", "维多利亚");
+        vm.AvailableOtherCovenants.Should().BeEquivalentTo("", "精准", "坚守");
+        vm.ActiveFilterTags.Should().Contain("炎").And.Contain("精准");
+        vm.FilteredOperators.Should().ContainSingle(o => o.Name == "甲");
+        vm.SetAvailableCovenants(["炎", "精准"]);
         vm.ClearCovenantHighlights();
         vm.HasRunInfo.Should().BeFalse();
-        vm.OnlyCurrentRun.Should().BeFalse();
         vm.AvailableCoreCovenants.Should().Contain("炎");
         vm.AvailableOtherCovenants.Should().Contain("精准");
+        vm.ActiveChips.Select(c => c.Value).Should().BeEquivalentTo("炎", "精准");
+        vm.FilteredOperators.Should().ContainSingle(o => o.Name == "甲");
+    }
+
+    [Fact]
+    public void EveryBanCombinationKeepsAllCovenantsSelectableAndFiltersSurvivingHolders()
+    {
+        string[] names = ["炎", "谢拉格", "精准", "奥术"];
+        List<Operator> operators = [
+            new() { Name = "单核心", CoreCovenants = ["炎"], AdditionalCovenants = ["精准"] },
+            new() { Name = "双核心", CoreCovenants = ["炎", "谢拉格"], AdditionalCovenants = ["奥术"] },
+            new() { Name = "单附加", AdditionalCovenants = ["精准"] },
+            new() { Name = "双附加", AdditionalCovenants = ["精准", "奥术"] },
+            new() { Name = "手动禁用", CoreCovenants = ["谢拉格"], AdditionalCovenants = ["精准"] }
+        ];
+        var banned = new HashSet<string>();
+        var vm = new OperatorBrowseViewModel();
+        vm.LoadOperators(operators);
+        vm.SetBanChecker(name => name == "手动禁用" || CovenantBanRules.IsExcluded(operators.Single(o => o.Name == name), banned));
+        vm.SetCovenantBanChecker(banned.Contains);
+        var chips = vm.CoreChips.Concat(vm.OtherChips).ToArray();
+
+        for (var mask = 0; mask < 16; mask++)
+        {
+            banned.Clear();
+            for (var bit = 0; bit < names.Length; bit++)
+                if ((mask & (1 << bit)) != 0) banned.Add(names[bit]);
+            vm.SetAvailableCovenants(names.Except(banned));
+            vm.NotifyBansChanged();
+            vm.CoreChips.Concat(vm.OtherChips).Should().Equal(chips);
+            foreach (var chip in chips)
+            {
+                vm.ResetFilters();
+                chip.IsBlocked.Should().BeFalse();
+                chip.IsSelected = true;
+                bool HasCovenant(Operator op) => chip.Kind == FilterChipKind.CoreCovenant
+                    ? op.CoreCovenants.Contains(chip.Value) : op.AdditionalCovenants.Contains(chip.Value);
+                var holders = operators.Where(HasCovenant).ToArray();
+                // Expected availability is explicit so this also guards the existing Ban rules.
+                bool Usable(Operator op) => op.Name switch
+                {
+                    "单核心" => !banned.Contains("炎"),
+                    "双核心" => !banned.Contains("炎") || !banned.Contains("谢拉格"),
+                    "单附加" => !banned.Contains("精准"),
+                    "双附加" => !banned.Contains("精准") || !banned.Contains("奥术"),
+                    _ => false
+                };
+                vm.FilteredOperators.Should().BeEquivalentTo(holders);
+                vm.SelectedAvailabilityFilter = AvailabilityFilter.Available;
+                vm.FilteredOperators.Should().BeEquivalentTo(holders.Where(Usable));
+                chip.Count.Should().Be(holders.Count(Usable));
+                chip.IsReduced.Should().Be(banned.Contains(chip.Value));
+                vm.SelectedAvailabilityFilter = AvailabilityFilter.Unavailable;
+                vm.FilteredOperators.Should().BeEquivalentTo(holders.Where(o => !Usable(o)));
+                vm.NotifyBansChanged();
+                vm.ClearCovenantHighlights();
+                chip.IsSelected.Should().BeTrue();
+            }
+        }
     }
 
     [Fact]
