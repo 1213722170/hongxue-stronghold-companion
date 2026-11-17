@@ -47,6 +47,9 @@ public partial class App : Application
 
     public App()
     {
+        // The overlay can stay alive while hidden. Closing the assistant must not
+        // wait for that window to close before stopping services and the process.
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
         // Catches exceptions before the WPF Dispatcher is running (e.g. DllNotFoundException
         // from MaaFramework native libs if VC++ Runtime is missing, or single-file extraction failures).
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -110,13 +113,14 @@ public partial class App : Application
         ASPAssistant.App.Windows.SystemBorder.RegisterForAllWindows();
         ASPAssistant.App.Controls.PanelToolTip.RegisterForAllElements();
         base.OnStartup(e);
+        var runningShutdownMode = ShutdownMode;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         try
         {
             var startupResult = Environment.GetEnvironmentVariable(UpdateStartupNotification.ResultVariable);
             Environment.SetEnvironmentVariable(UpdateStartupNotification.ResultVariable, null);
             _updateStartup = new UpdateStartupNotification(startupResult);
-            if (await StartupAsync(e))
+            if (await StartupAsync(runningShutdownMode))
                 _updateStartup.ReportReady();
             else
                 _updateStartup.ReportFailure("启动已取消");
@@ -153,7 +157,7 @@ public partial class App : Application
         }
     }
 
-    private async Task<bool> StartupAsync(StartupEventArgs e)
+    private async Task<bool> StartupAsync(ShutdownMode runningShutdownMode)
     {
         // Paths
         var appDir = AppContext.BaseDirectory;
@@ -323,7 +327,8 @@ public partial class App : Application
             operatorVm, equipmentVm, trackingVm, gameStateVm, banVm, enemyVm,
             lineupVm, lineupShareService,
             operators, equipment, strategies, _settingsManager, gameTheme, sidePanelPosition,
-            new LineupPlanner(operators, covenantInfos), covenantInfos);
+            new LineupPlanner(operators, covenantInfos), covenantInfos,
+            closeBehavior: await _settingsManager.LoadMainWindowCloseBehaviorAsync());
         sidePanel.GameThemeChanged += theme => shopReader.Theme = theme;
         sidePanel.InitAutomaticGameTheme(automaticGameTheme);
         sidePanel.AutomaticGameThemeChanged += automatic => _ocrScanner.AutomaticGameTheme = automatic;
@@ -722,6 +727,7 @@ public partial class App : Application
 
         // Show windows and start services
         MainWindow = _sidePanel;
+        ShutdownMode = runningShutdownMode;
         _sidePanel.Show();
         if (_settingsManager.DeployPoolRecoveryNotice is { } recoveryNotice)
             ConfirmDialog.Tell(_sidePanel, "已恢复干员拥有状态", recoveryNotice);
@@ -734,7 +740,6 @@ public partial class App : Application
         };
         await _sidePanel.InitRecognitionHotkeyAsync();
         await _sidePanel.InitAssistantHotkeyAsync();
-        ShutdownMode = ShutdownMode.OnLastWindowClose;
         _windowTracker.Start();
         _ocrScanner.Start();
         AppLogger.Info("App", "Startup complete");

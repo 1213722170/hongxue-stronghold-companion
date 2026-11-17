@@ -57,6 +57,7 @@ internal static class UpdateAndTrayTests
                 panel.IsAssistantHidden.Should().BeFalse("without a tray recovery icon the panel must stay visible");
                 IsWindowVisible(hwnd).Should().BeTrue();
                 iconField.SetValue(tray, originalIcon);
+                CloseBehaviorTests.Verify(panel, tray, settings, folder);
                 Await(panel.InitAssistantHotkeyAsync());
                 ((TextBox)panel.FindName("AssistantHotkeyBox")).Text.Should().Contain("未设置");
                 var keys = new List<AssistantHotkey>();

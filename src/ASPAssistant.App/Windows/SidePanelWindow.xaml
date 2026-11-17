@@ -41,7 +41,7 @@
                         </Button>
                         <Button Click="OnMinimize" Tag="{StaticResource IconMinimize}" AutomationProperties.Name="最小化" ToolTip="最小化"
                                 Style="{StaticResource TitleBarButton}" />
-                        <Button Click="OnClose" Tag="{StaticResource IconClose}" AutomationProperties.Name="关闭" ToolTip="关闭"
+                        <Button Click="OnClose" Tag="{StaticResource IconClose}" AutomationProperties.Name="关闭" ToolTip="退出助手（停止后台识别）"
                                 Style="{StaticResource CloseButton}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
@@ -437,6 +437,17 @@
                                     </StackPanel>
                                 </Border>
 
+                                <TextBlock Text="关闭主界面时" Style="{StaticResource SettingsCaption}" />
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <ComboBox x:Name="CloseBehaviorSelector" AutomationProperties.Name="关闭主界面时">
+                                            <ComboBoxItem Content="每次询问" />
+                                            <ComboBoxItem Content="最小化到托盘" />
+                                            <ComboBoxItem Content="退出程序" />
+                                        </ComboBox>
+                                        <TextBlock Text="最小化到托盘后，后台识别继续；点击托盘图标恢复助手。" TextWrapping="Wrap" FontSize="11" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    </StackPanel>
+                                </Border>
                                 <TextBlock Text="界面调整" Style="{StaticResource SettingsCaption}" />
                                 <Border Style="{StaticResource SettingsCard}">
                                     <StackPanel>

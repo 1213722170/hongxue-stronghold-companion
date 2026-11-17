@@ -7,6 +7,30 @@ namespace ASPAssistant.Tests.Data;
 
 public class SettingsManagerTests : IDisposable
 {
+    [Theory]
+    [InlineData(MainWindowCloseBehavior.Ask)]
+    [InlineData(MainWindowCloseBehavior.MinimizeToTray)]
+    [InlineData(MainWindowCloseBehavior.Exit)]
+    public async Task CloseBehavior_PersistsAcrossSettingsInstances(MainWindowCloseBehavior behavior)
+    {
+        await _manager.SaveMainWindowCloseBehaviorAsync(behavior);
+        (await new SettingsManager(_tempDir).LoadMainWindowCloseBehaviorAsync()).Should().Be(behavior);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("broken")]
+    [InlineData("\"Unknown\"")]
+    [InlineData("99")]
+    public async Task CloseBehavior_MissingOrInvalidDefaultsToAsk(string? json)
+    {
+        if (json is not null)
+        {
+            Directory.CreateDirectory(_tempDir);
+            await File.WriteAllTextAsync(Path.Combine(_tempDir, "close-behavior.json"), json);
+        }
+        (await _manager.LoadMainWindowCloseBehaviorAsync()).Should().Be(MainWindowCloseBehavior.Ask);
+    }
     [Fact]
     public async Task UiScaleOverrides_RoundTripAndInheritWithoutChangingGlobal()
     {

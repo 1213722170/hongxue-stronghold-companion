@@ -32,6 +32,28 @@ public class SettingsManager
         _settingsDir = settingsDir;
     }
 
+    public async Task<MainWindowCloseBehavior> LoadMainWindowCloseBehaviorAsync()
+    {
+        try
+        {
+            var json = await File.ReadAllTextAsync(Path.Combine(_settingsDir, "close-behavior.json"));
+            var name = JsonSerializer.Deserialize<string>(json);
+            if (Enum.TryParse<MainWindowCloseBehavior>(name, out var behavior) && Enum.IsDefined(behavior))
+                return behavior;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            AppLogger.Warn("Settings", $"使用默认关闭行为：{ex.Message}");
+        }
+        return MainWindowCloseBehavior.Ask;
+    }
+
+    public Task SaveMainWindowCloseBehaviorAsync(MainWindowCloseBehavior behavior)
+    {
+        if (!Enum.IsDefined(behavior)) throw new ArgumentOutOfRangeException(nameof(behavior));
+        return SavePreferenceAsync("close-behavior.json", JsonSerializer.Serialize(behavior.ToString()));
+    }
+
     public async Task<GameConnectionSettings> LoadGameConnectionAsync()
     {
         try

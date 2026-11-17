@@ -104,7 +104,8 @@ public partial class SidePanelWindow : Window
         SidePanelPositionSettings positionSettings,
         LineupPlanner? lineupPlanner = null,
         IReadOnlyList<CovenantInfo>? covenants = null,
-        SidebarAppearance? appearance = null)
+        SidebarAppearance? appearance = null,
+        MainWindowCloseBehavior closeBehavior = MainWindowCloseBehavior.Ask)
     {
         _appearance = appearance ?? new SidebarAppearance();
         OperatorBrowseVm = operatorVm;
@@ -125,6 +126,9 @@ public partial class SidePanelWindow : Window
         GameTheme = gameTheme;
 
         InitializeComponent();
+        _closeBehavior = Enum.IsDefined(closeBehavior) ? closeBehavior : MainWindowCloseBehavior.Ask;
+        CloseBehaviorSelector.SelectedIndex = (int)_closeBehavior;
+        CloseBehaviorSelector.SelectionChanged += OnCloseBehaviorChanged;
         _preferredWidthDip = Width;
         if (positionSettings.Placement is { } placement)
         {
@@ -285,6 +289,14 @@ public partial class SidePanelWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Alt+F4 / system menu / taskbar close. Explicit Close() and application
+        // shutdown remain available for update restarts and resource cleanup.
+        if (msg == 0x0112 && (wParam.ToInt64() & 0xFFF0) == 0xF060) // WM_SYSCOMMAND, SC_CLOSE
+        {
+            handled = true;
+            Dispatcher.BeginInvoke(new Action(async () => await RequestUserCloseAsync()));
+            return IntPtr.Zero;
+        }
         if (msg == User32.WM_ENTERSIZEMOVE)
         {
             _isUserMovingOrSizing = true;
@@ -1159,12 +1171,45 @@ public partial class SidePanelWindow : Window
         }
     }
 
-    private void OnClose(object sender, RoutedEventArgs e)
-    {
-        if (!ConfirmDialog.Ask(this, "退出确认", "确定要关闭鸿雪·卫戍助手吗？\n关闭后识别、悬浮提示与快捷键都会停止。", "关闭"))
-            return;
+    private MainWindowCloseBehavior _closeBehavior;
+    private bool _closeRequestPending;
 
-        Application.Current.Shutdown();
+    private async void OnClose(object sender, RoutedEventArgs e) => await RequestUserCloseAsync();
+
+    private async void OnCloseBehaviorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CloseBehaviorSelector.SelectedIndex < 0) return;
+        _closeBehavior = (MainWindowCloseBehavior)CloseBehaviorSelector.SelectedIndex;
+        var behavior = _closeBehavior;
+        await SavePreferenceAsync(() => _settingsManager.SaveMainWindowCloseBehaviorAsync(behavior), CloseBehaviorSelector);
+    }
+
+    internal async Task RequestUserCloseAsync()
+    {
+        if (_closeRequestPending) return;
+        _closeRequestPending = true;
+        try
+        {
+            var behavior = _closeBehavior;
+            if (behavior == MainWindowCloseBehavior.Ask)
+            {
+                var dialog = new CloseBehaviorDialog { Owner = this };
+                if (dialog.ShowDialog() != true || dialog.Choice is not { } choice) return;
+                behavior = choice;
+                if (dialog.Remember)
+                {
+                    // Await persistence before exiting, and avoid a second write from the selector.
+                    CloseBehaviorSelector.SelectionChanged -= OnCloseBehaviorChanged;
+                    _closeBehavior = behavior;
+                    CloseBehaviorSelector.SelectedIndex = (int)behavior;
+                    CloseBehaviorSelector.SelectionChanged += OnCloseBehaviorChanged;
+                    await SavePreferenceAsync(() => _settingsManager.SaveMainWindowCloseBehaviorAsync(behavior), CloseBehaviorSelector);
+                }
+            }
+            if (behavior == MainWindowCloseBehavior.Exit) Close();
+            else if (!IsAssistantHidden) ToggleAssistantVisibilityRequested?.Invoke();
+        }
+        finally { _closeRequestPending = false; }
     }
 
     // ── Lineup feature wiring ──────────────────────────────────────────────
